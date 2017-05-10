@@ -1,0 +1,8 @@
+{
+    "name": "visualizationProject",
+    "version": "1.0.0",
+    "keywords": ["util", "functional", "server", "client", "browser"],
+    "author": "ky4843ca",
+    "contributors": [],
+    "dependencies": {}
+}

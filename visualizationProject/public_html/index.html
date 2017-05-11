@@ -41,22 +41,8 @@
     var edges = new vis.DataSet();
     var data = { nodes: nodes, edges: edges };
 
-    var options = {
-            nodes: {borderWidth: 0, font: { color: '#FFF', size: 27 }},
-            edges: {arrows: {to: {enabled: true}}, font: {size: 20, align: 'top'}},
-            interaction: {hideEdgesOnDrag: true},
-            physics: {
-                forceAtlas2Based: {
-                  gravitationalConstant: -36,
-                  springLength: 150,
-                  damping: 0.46,
-                  avoidOverlap: 0.04
-                },
-                maxVelocity: 29,
-                minVelocity: 1.45,
-                solver: "forceAtlas2Based"
-              }
-        };
+    var options;
+    setupDefaultOptions();
 
     var network;
     network = new vis.Network(container, data, options);
@@ -94,37 +80,67 @@
     
     var removedEdges = [];
     var removedNodes = [];
-    function removeUnconnectedNodes(data){
+    function removeUnconnectedMembers(data){
         addBackRemovedEdgesAndNodes();
-        var mainNode = network.body.data.nodes.get(data.nodes[0]);
+        var mainNode = nodes.get(data.nodes[0]);
         var safeNodes = new Set([]);
-        for(e in network.body.data.edges.get()){
-            var edge = network.body.data.edges.get(e);
+        for(e in edges.get()){
+            var edge = edges.get(e);
             if(mainNode.id != edge.from && mainNode.id != edge.to){
-                network.body.data.edges.remove(e);
+                edges.remove(e);
                 removedEdges.push(edge);
             }else{
                 safeNodes.add(edge.from);
                 safeNodes.add(edge.to);
             }
         }
-        var tmp = nodes.get();
-        for(i = 0; i < tmp.length; i++){
-            if(!safeNodes.has(tmp[i].id)){
-                nodes.remove(tmp[i].id);
-                removedNodes.push(tmp[i]);
+        var nodeArray = nodes.get();
+        for(i = 0; i < nodeArray.length; i++){
+            if(!safeNodes.has(nodeArray[i].id)){
+                nodes.remove(nodeArray[i].id);
+                removedNodes.push(nodeArray[i]);
             }
         }
     }
     
     function addBackRemovedEdgesAndNodes(){
-        network.body.data.edges.add(removedEdges);
-        network.body.data.nodes.add(removedNodes);
+        edges.add(removedEdges);
+        nodes.add(removedNodes);
         removedEdges = [];
         removedNodes = [];
     }
     
     function handleClick(selectionData){
+        setupDefaultOptions();
+        network.setOptions(options);
+        if(selectionData.nodes.length == 0 && selectionData.edges.length == 0){
+            addBackRemovedEdgesAndNodes();
+        }else if(selectionData.nodes.length != 0){
+            removeUnconnectedMembers(selectionData);
+        }
+    }
+    
+    function getHierarchy(selectionData){
+        var mainNode = nodes.get(selectionData.nodes[0]);
+        for(e in network.body.edges){
+            var edge = edges.get(e);
+            if(edge != null && mainNode.id != edge.from){
+                edges.remove(e);
+                removedEdges.push(edge);
+            }
+        }
+        var hierarchOptions = options;
+        hierarchOptions.layout = {
+          hierarchical: {
+            sortMethod: 'directed'
+          }
+        };
+        hierarchOptions.edges.font.align = 'horizontal';
+        
+        network.setOptions(hierarchOptions);
+    }
+    
+    function setupDefaultOptions(){
         options = {
             nodes: {borderWidth: 0, font: { color: '#FFF', size: 27 }},
             edges: {arrows: {to: {enabled: true}}, font: {size: 20, align: 'top'}},
@@ -142,32 +158,6 @@
               },
             layout: {hierarchical: {enabled: false}}
         };
-        network.setOptions(options);
-        if(selectionData.nodes.length == 0 && selectionData.edges.length == 0){
-            addBackRemovedEdgesAndNodes();
-        }else if(selectionData.nodes.length != 0){
-            removeUnconnectedNodes(selectionData);
-        }
-    }
-    
-    function getHierarchy(selectionData){
-        var mainNode = network.body.data.nodes.get(selectionData.nodes[0]);
-        for(e in network.body.edges){
-            var edge = network.body.data.edges.get(e);
-            if(edge != null && mainNode.id != edge.from){
-                network.body.data.edges.remove(e);
-                removedEdges.push(edge);
-            }
-        }
-        var hierarchOptions = options;
-        hierarchOptions.layout = {
-          hierarchical: {
-            sortMethod: 'directed'
-          }
-        };
-        hierarchOptions.edges.font.align = 'horizontal';
-        
-        network.setOptions(hierarchOptions);
     }
 </script>
 </body>

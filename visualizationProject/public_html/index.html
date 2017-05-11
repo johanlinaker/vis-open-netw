@@ -5,8 +5,8 @@
 
     <style type="text/css">
         #mynetwork {
-            width: 1800px;
-            height: 900px;
+            min-width: 400px;
+            min-height: 300px;
             border: 1px solid lightgray;
         }
     </style>
@@ -33,7 +33,7 @@
     }
 
     var gephiImported;
-    loadJSON('./Data/R2.2.0-R2.7.0_patches.json', redrawAll, function(err) {console.log('error');});
+    loadJSON('./Data/R2.2.0_comments.json', redrawAll, function(err) {console.log('error');});
 
     var container = document.getElementById('mynetwork');
 
@@ -42,13 +42,35 @@
     var data = { nodes: nodes, edges: edges };
 
     var options = {
-            configure: true,
-            physics: {enabled: false}
+            nodes: {borderWidth: 0, font: { color: '#FFF', size: 27 }},
+            edges: {arrows: {to: {enabled: true}}, font: {size: 20, align: 'top'}},
+            interaction: {hideEdgesOnDrag: true},
+            physics: {
+                forceAtlas2Based: {
+                  gravitationalConstant: -36,
+                  springLength: 150,
+                  damping: 0.46,
+                  avoidOverlap: 0.04
+                },
+                maxVelocity: 29,
+                minVelocity: 1.45,
+                solver: "forceAtlas2Based"
+              }
         };
 
     var network;
     network = new vis.Network(container, data, options);
 
+    network.fit();
+    
+    network.on('click', handleClick);
+    
+    network.on('doubleClick', function(selectionData){
+        if(selectionData.nodes.length != 0){
+            getHierarchy(selectionData);
+        }
+    });
+    
     function redrawAll(gephiJSON) {
         if (gephiJSON.nodes === undefined) {
             gephiJSON = gephiImported;
@@ -60,16 +82,92 @@
         nodes.clear();
         edges.clear();
 
-        var parsed = vis.network.gephiParser.parseGephi(gephiJSON, {
-            //fixed: false,
-            //parseColor: false
-        }); 
+        var parsed = vis.network.gephiParser.parseGephi(gephiJSON); 
 
-        // add the parsed data to the DataSets.
+        parsed.edges.forEach(function(e){
+            e.label = e.label.substr(0,4);
+        });
+        // add the parsed data to the DataSets
         nodes.add(parsed.nodes);
         edges.add(parsed.edges);
-
-        network.fit(); // zoom to fit
+    }
+    
+    var removedEdges = [];
+    var removedNodes = [];
+    function removeUnconnectedNodes(data){
+        addBackRemovedEdgesAndNodes();
+        var mainNode = network.body.data.nodes.get(data.nodes[0]);
+        var safeNodes = new Set([]);
+        for(e in network.body.data.edges.get()){
+            var edge = network.body.data.edges.get(e);
+            if(mainNode.id != edge.from && mainNode.id != edge.to){
+                network.body.data.edges.remove(e);
+                removedEdges.push(edge);
+            }else{
+                safeNodes.add(edge.from);
+                safeNodes.add(edge.to);
+            }
+        }
+        var tmp = nodes.get();
+        for(i = 0; i < tmp.length; i++){
+            if(!safeNodes.has(tmp[i].id)){
+                nodes.remove(tmp[i].id);
+                removedNodes.push(tmp[i]);
+            }
+        }
+    }
+    
+    function addBackRemovedEdgesAndNodes(){
+        network.body.data.edges.add(removedEdges);
+        network.body.data.nodes.add(removedNodes);
+        removedEdges = [];
+        removedNodes = [];
+    }
+    
+    function handleClick(selectionData){
+        options = {
+            nodes: {borderWidth: 0, font: { color: '#FFF', size: 27 }},
+            edges: {arrows: {to: {enabled: true}}, font: {size: 20, align: 'top'}},
+            interaction: {hideEdgesOnDrag: true},
+            physics: {
+                forceAtlas2Based: {
+                  gravitationalConstant: -36,
+                  springLength: 150,
+                  damping: 0.46,
+                  avoidOverlap: 0.04
+                },
+                maxVelocity: 29,
+                minVelocity: 1.45,
+                solver: "forceAtlas2Based"
+              },
+            layout: {hierarchical: {enabled: false}}
+        };
+        network.setOptions(options);
+        if(selectionData.nodes.length == 0 && selectionData.edges.length == 0){
+            addBackRemovedEdgesAndNodes();
+        }else if(selectionData.nodes.length != 0){
+            removeUnconnectedNodes(selectionData);
+        }
+    }
+    
+    function getHierarchy(selectionData){
+        var mainNode = network.body.data.nodes.get(selectionData.nodes[0]);
+        for(e in network.body.edges){
+            var edge = network.body.data.edges.get(e);
+            if(edge != null && mainNode.id != edge.from){
+                network.body.data.edges.remove(e);
+                removedEdges.push(edge);
+            }
+        }
+        var hierarchOptions = options;
+        hierarchOptions.layout = {
+          hierarchical: {
+            sortMethod: 'directed'
+          }
+        };
+        hierarchOptions.edges.font.align = 'horizontal';
+        
+        network.setOptions(hierarchOptions);
     }
 </script>
 </body>

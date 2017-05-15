@@ -1,6 +1,9 @@
 <html>
 <head>
+  <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
   <script src="http://visjs.org/dist/vis.js"></script>
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
   <link href="http://visjs.org/dist/vis.css" rel="stylesheet" type="text/css" />
 
     <style type="text/css">
@@ -16,6 +19,9 @@
             border: 1px solid lightgray;
             display: block;
             overflow-x: auto;
+        }
+        #filterContainer {
+            width: 98%;
         }
         #metricsTable {
             height: 100%;
@@ -35,10 +41,21 @@
 <div id="mynetwork"></div>
 <div id="extraInfoContainer">
     <h1 style="display:none;"></h1>
-    <table id="metricsTable"></table></div>
-<h2>Time Filter: </h2>0<input id="timeFilter" type="range"/>100
-<h2>Issue Type Filter: </h2><input class="issueTypeFilter" id="issueType1" type="button" value="Type 1"/><input class="issueTypeFilter" id="issueType2" type="button" value="Type 2"/><input class="issueTypeFilter" id="issueType3" type="button" value="Type 3"/>
-
+    <table id="metricsTable"></table>
+</div>
+<div id="filterContainer">
+    <h2>Time Filter: <input type="text" id="timeRange" readonly ></h2><div id="timeFilter"></div>
+    <h2>Issue Type Filter: </h2>
+    <fieldset>
+      <legend>Select Issue Types: </legend>
+      <label for="type1">Issue Type 1</label>
+      <input class="checkboxradio" type="checkbox" name="type1" id="type1" checked>
+      <label for="type2">Issue Type 2</label>
+      <input class="checkboxradio" type="checkbox" name="type2" id="type2" checked>
+      <label for="type3">Issue Type 3</label>
+      <input class="checkboxradio" type="checkbox" name="type3" id="type3" checked>
+    </fieldset>
+</div>
 <script type="text/javascript">
     function loadJSON(path, success, error) {
         var xhr = new XMLHttpRequest();
@@ -55,6 +72,20 @@
         xhr.open('GET', path, true);
         xhr.send();
     }
+    
+    $( "#timeFilter" ).slider({
+      range: true,
+      min: 0,
+      max: 100,
+      values: [ 75, 99 ],
+      slide: function( event, ui ) {
+        $( "#timeRange" ).val( ui.values[ 0 ] + " - " + ui.values[ 1 ] );
+      }
+    });
+    $( "#timeRange" ).val( $( "#timeFilter" ).slider( "values", 0 ) +
+      " - " + $( "#timeFilter" ).slider( "values", 1 ) );
+      
+    $( "input.checkboxradio" ).checkboxradio();
     
     loadJSON('./Data/R2.2.0_comments_metrics.json', buildMetricsTable, function(err) {console.log(err);});
 

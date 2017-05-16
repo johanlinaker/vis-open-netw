@@ -56,6 +56,55 @@
     </fieldset>
 </div>
 <script type="text/javascript">
+    var desiredMetricColumns;
+    var gephiImported;
+    var container = document.getElementById('mynetwork');
+    var nodes = new vis.DataSet();
+    var edges = new vis.DataSet();
+    var data = { nodes: nodes, edges: edges };
+    var options;
+    var network;
+    
+    initialize();
+    
+    function initialize() {
+        desiredMetricColumns = ["organization", "degreeOutBinary", "degreeOut", "degreeInBinary", "degreeIn"];
+
+        $( "#timeFilter" ).slider({
+          range: true,
+          min: 0,
+          max: 100,
+          values: [ 75, 99 ],
+          slide: function( event, ui ) {
+            $( "#timeRange" ).val( ui.values[ 0 ] + " - " + ui.values[ 1 ] );
+          }
+        });
+        $( "#timeRange" ).val( $( "#timeFilter" ).slider( "values", 0 ) +
+          " - " + $( "#timeFilter" ).slider( "values", 1 ) );
+
+        $( "input.checkboxradio" ).checkboxradio();
+
+        loadJSON('./Data/R2.2.0_comments_metrics.json', buildMetricsTable, function(err) {console.log(err);});
+
+        loadJSON('./Data/R2.2.0_comments.json', redrawAll, function(err) {console.log(err);});
+
+        setupDefaultOptions();
+
+        network = new vis.Network(container, data, options);
+
+        network.fit();
+
+        network.on('click', handleClick);
+
+        network.on('doubleClick', function(selectionData){
+            if(selectionData.nodes.length !== 0){
+                getHierarchy(selectionData);
+            }
+        });
+
+        network.on('selectEdge', displayEdgeData);
+    }
+    
     function loadJSON(path, success, error) {
         var xhr = new XMLHttpRequest();
         xhr.onreadystatechange = function () {
@@ -72,51 +121,8 @@
         xhr.send();
     }
     
-    $( "#timeFilter" ).slider({
-      range: true,
-      min: 0,
-      max: 100,
-      values: [ 75, 99 ],
-      slide: function( event, ui ) {
-        $( "#timeRange" ).val( ui.values[ 0 ] + " - " + ui.values[ 1 ] );
-      }
-    });
-    $( "#timeRange" ).val( $( "#timeFilter" ).slider( "values", 0 ) +
-      " - " + $( "#timeFilter" ).slider( "values", 1 ) );
-      
-    $( "input.checkboxradio" ).checkboxradio();
-    
-    loadJSON('./Data/R2.2.0_comments_metrics.json', buildMetricsTable, function(err) {console.log(err);});
-
-    var gephiImported;
-    loadJSON('./Data/R2.2.0_comments.json', redrawAll, function(err) {console.log(err);});
-
-    var container = document.getElementById('mynetwork');
-
-    var nodes = new vis.DataSet();
-    var edges = new vis.DataSet();
-    var data = { nodes: nodes, edges: edges };
-
-    var options;
-    setupDefaultOptions();
-
-    var network;
-    network = new vis.Network(container, data, options);
-
-    network.fit();
-    
-    network.on('click', handleClick);
-    
-    network.on('doubleClick', function(selectionData){
-        if(selectionData.nodes.length != 0){
-            getHierarchy(selectionData);
-        }
-    });
-    
-    network.on('selectEdge', displayEdgeData);
-    
     function displayEdgeData(selectionData) {
-        if(selectionData.nodes.length == 0 && selectionData.edges.length == 1) {
+        if(selectionData.nodes.length === 0 && selectionData.edges.length === 1) {
             $("#metricsTable").css("display","none");
             
             var edge = edges.get(selectionData.edges[0]);
@@ -131,7 +137,7 @@
         var col = [];
         for (var i = 0; i < metricsJSON.length; i++) {
             for (var key in metricsJSON[i]) {
-                if (col.indexOf(key) === -1) {
+                if (col.indexOf(key) === -1 && desiredMetricColumns.indexOf(key) !== -1) {
                     col.push(key);
                 }
             }
@@ -191,7 +197,7 @@
         var safeNodes = new Set([]);
         for(e in edges.get()){
             var edge = edges.get(e);
-            if(mainNode.id != edge.from && mainNode.id != edge.to){
+            if(mainNode.id !== edge.from && mainNode.id !== edge.to){
                 edges.remove(e);
                 removedEdges.push(edge);
             }else{
@@ -216,14 +222,14 @@
     }
     
     function handleClick(selectionData){
-        if(!(selectionData.edges.length == 1 && selectionData.nodes.length == 0 && options.layout.hierarchical.enabled)){
+        if(!(selectionData.edges.length === 1 && selectionData.nodes.length === 0 && options.layout.hierarchical.enabled)){
             setupDefaultOptions();
             network.setOptions(options);
         }
-        if(selectionData.nodes.length == 0 && selectionData.edges.length == 0){
+        if(selectionData.nodes.length === 0 && selectionData.edges.length === 0){
             addBackRemovedEdgesAndNodes();
             resetExtraInfo();
-        }else if(selectionData.nodes.length != 0){
+        }else if(selectionData.nodes.length !== 0){
             removeUnconnectedMembers(selectionData);
             resetExtraInfo();
         }
@@ -238,7 +244,7 @@
         var mainNode = nodes.get(selectionData.nodes[0]);
         for(e in network.body.edges){
             var edge = edges.get(e);
-            if(edge != null && mainNode.id != edge.from){
+            if(edge !== null && mainNode.id !== edge.from){
                 edges.remove(e);
                 removedEdges.push(edge);
             }

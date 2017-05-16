@@ -233,6 +233,30 @@
             removeUnconnectedMembers(selectionData);
             resetExtraInfo();
         }
+        
+        filterTable();
+    }
+    
+    function filterTable(){
+        var rows = $("#metricsTable > tbody > tr:not(:first-child)");
+        rows.css("display", "");
+        
+        var orgTds = rows.children("td:first-child");
+        
+        $.each(orgTds, function(index, orgTd) {
+            var nodeArray = nodes.get();
+            var orgTdJq = $(orgTd);
+            var safe = false;
+            for(i = 0; i < nodeArray.length; i++){
+                if(nodeArray[i].id === orgTdJq.html()){
+                    safe = true;
+                    break;
+                }
+            }
+            if(!safe){
+                orgTdJq.parent().css("display", "none");
+            }
+        });
     }
     
     function resetExtraInfo(){

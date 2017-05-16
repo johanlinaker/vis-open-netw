@@ -3,39 +3,38 @@
   <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
   <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
   <script src="http://visjs.org/dist/vis.js"></script>
-  <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
-  <link href="http://visjs.org/dist/vis.css" rel="stylesheet" type="text/css" />
-
-    <style type="text/css">
-        #mynetwork {
-            width: 49%;
-            height: 700px;
-            border: 1px solid lightgray;
-            float: left;
-        }
-        #extraInfoContainer {
-            width: 49%;
-            height: 700px;
-            border: 1px solid lightgray;
-            display: block;
-            overflow-x: auto;
-        }
-        #filterContainer {
-            width: 98%;
-        }
-        #metricsTable {
-            height: 100%;
-            display: block;
-            overflow-x: auto;
-        }
-        .issueTypeFilter {
-            margin: 10px;
-            margin-left: 0;
-        }
-        h1 {
-            text-align: center;
-        }
-    </style>
+  <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" type="text/css" />
+  <link rel="stylesheet" href="http://visjs.org/dist/vis.css" type="text/css" />
+  <style type="text/css">
+    #mynetwork {
+        width: 49%;
+        height: 700px;
+        border: 1px solid lightgray;
+        float: left;
+    }
+    #extraInfoContainer {
+        width: 49%;
+        height: 700px;
+        border: 1px solid lightgray;
+        display: block;
+        overflow-x: auto;
+    }
+    #filterContainer {
+        width: 98%;
+    }
+    #metricsTable {
+        height: 100%;
+        display: block;
+        overflow-x: auto;
+    }
+    .issueTypeFilter {
+        margin: 10px;
+        margin-left: 0;
+    }
+    h1 {
+        text-align: center;
+    }
+  </style>
 </head>
 <body>
 <div id="mynetwork"></div>
@@ -118,12 +117,12 @@
     
     function displayEdgeData(selectionData) {
         if(selectionData.nodes.length == 0 && selectionData.edges.length == 1) {
-            document.getElementById("metricsTable").style.display = "none";
+            $("#metricsTable").css("display","none");
             
             var edge = edges.get(selectionData.edges[0]);
-            var header = document.querySelectorAll("#extraInfoContainer h1")[0];
-            header.innerText = edge.from + " vs. " + edge.to;
-            header.style.display = "";
+            var header = $("#extraInfoContainer h1");
+            header.text(edge.from + " vs. " + edge.to);
+            header.css("display","");
         }
     }
     
@@ -217,7 +216,7 @@
     }
     
     function handleClick(selectionData){
-        if(!(selectionData.edges.length == 1 && options.layout.hierarchical.enabled)){
+        if(!(selectionData.edges.length == 1 && selectionData.nodes.length == 0 && options.layout.hierarchical.enabled)){
             setupDefaultOptions();
             network.setOptions(options);
         }
@@ -231,8 +230,8 @@
     }
     
     function resetExtraInfo(){
-        document.querySelectorAll("#extraInfoContainer h1")[0].style.display = "none";
-        document.getElementById("metricsTable").style.display = "";
+        $("#extraInfoContainer h1").css("display","none");
+        $("#metricsTable").css("display","");
     }
     
     function getHierarchy(selectionData){

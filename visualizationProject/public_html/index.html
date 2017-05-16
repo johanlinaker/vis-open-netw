@@ -103,6 +103,20 @@
         });
 
         network.on('selectEdge', displayEdgeData);
+        
+        $("#metricsTable").on("click", function(data){
+            var dataJq = $(data.target);
+            var node = nodes.get(dataJq.html());
+            
+            addBackRemovedEdgesAndNodes();
+            
+            if(node !== null){
+                removeUnconnectedMembers(node);
+            }
+            
+            resetExtraInfo();
+            filterTable(node);
+        });
     }
     
     function loadJSON(path, success, error) {
@@ -191,9 +205,7 @@
     
     var removedEdges = [];
     var removedNodes = [];
-    function removeUnconnectedMembers(data){
-        addBackRemovedEdgesAndNodes();
-        var mainNode = nodes.get(data.nodes[0]);
+    function removeUnconnectedMembers(mainNode){
         var safeNodes = new Set([]);
         for(e in edges.get()){
             var edge = edges.get(e);
@@ -229,17 +241,20 @@
         if(selectionData.nodes.length === 0 && selectionData.edges.length === 0){
             addBackRemovedEdgesAndNodes();
             resetExtraInfo();
+            filterTable(null);
         }else if(selectionData.nodes.length !== 0){
-            removeUnconnectedMembers(selectionData);
+            var selectedNode = nodes.get(selectionData.nodes[0]);
+            addBackRemovedEdgesAndNodes();
+            removeUnconnectedMembers(selectedNode);
             resetExtraInfo();
+            filterTable(selectedNode);
         }
-        
-        filterTable();
     }
     
-    function filterTable(){
+    function filterTable(selectedNode){
         var rows = $("#metricsTable > tbody > tr:not(:first-child)");
         rows.css("display", "");
+        rows.css("font-weight", "");
         
         var orgTds = rows.children("td:first-child");
         
@@ -255,6 +270,8 @@
             }
             if(!safe){
                 orgTdJq.parent().css("display", "none");
+            }else if(selectedNode !== null && orgTdJq.html() === selectedNode.id){
+                orgTdJq.parent().css("font-weight", "bold");
             }
         });
     }

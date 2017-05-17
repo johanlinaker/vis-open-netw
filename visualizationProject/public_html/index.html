@@ -83,10 +83,14 @@
           " - " + $( "#timeFilter" ).slider( "values", 1 ) );
 
         $( "input.checkboxradio" ).checkboxradio();
+        
+        $.getJSON("http://localhost:8080/", function(data, status, jqXHR){
+            redrawAll(JSON.parse(jqXHR.responseText));
+        });
 
         loadJSON('./Data/R2.2.0_comments_metrics.json', buildMetricsTable, function(err) {console.log(err);});
 
-        loadJSON('./Data/R2.2.0_comments.json', redrawAll, function(err) {console.log(err);});
+        //loadJSON('./Data/R2.2.0_comments.json', redrawAll, function(err) {console.log(err);});
 
         setupDefaultOptions();
 

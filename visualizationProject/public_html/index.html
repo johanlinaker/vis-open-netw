@@ -27,6 +27,10 @@
         display: block;
         overflow-x: auto;
     }
+    #fileSelectDialog {
+        padding: 0;
+        padding-top: 5px;
+    }
     .issueTypeFilter {
         margin: 10px;
         margin-left: 0;
@@ -54,6 +58,15 @@
       <label for="type3">Issue Type 3</label>
       <input class="checkboxradio" type="checkbox" name="type3" id="type3" checked>
     </fieldset>
+</div>
+<div id="fileSelectDialog" class="dialog" title="File Selector">
+  <form action="#">
+    <fieldset>
+      <label for="fileNameSelector">Select a file</label>
+      <select name="fileName" id="fileNameSelector" class="selectmenu">
+      </select>
+    </fieldset>
+  </form>
 </div>
 <script type="text/javascript">
     var desiredMetricColumns;
@@ -84,18 +97,32 @@
 
         $( "input.checkboxradio" ).checkboxradio();
         
-        $.getJSON("http://localhost:8080/R2.2.0_comments.json", function(data, status, jqXHR){
+        $.get("http://localhost:8080/potentialFiles", function(data, status, jqXHR){
+            var newdata = data.slice(2,-2).split("', '");
+            $.each(data.slice(2,-2).split("', '"), function(index, file){
+                $("#fileNameSelector").append("<option>" + file.slice(0,-5) + "</option>");
+            });
+        });
+        
+        $( ".dialog" ).dialog();
+        
+        $( "select.selectmenu" )
+                .selectmenu()
+                .on("selectmenuselect", function(event, ui) {
+                    $(event.currentTarget).parents(".dialog").dialog("close");
+                    initializeNetwork(ui.item.value);
+        });
+    }
+    
+    function initializeNetwork(selection) {
+        $.getJSON("http://localhost:8080/" + selection + ".json", function(data, status, jqXHR){
             redrawAll(JSON.parse(jqXHR.responseText));
         });
 
-        $.getJSON("http://localhost:8080/R2.2.0_comments_metrics.json", function(data, status, jqXHR){
+        $.getJSON("http://localhost:8080/" + selection + "_metrics.json", function(data, status, jqXHR){
             buildMetricsTable(JSON.parse(jqXHR.responseText));
         });
         
-        //loadJSON('./Data/R2.2.0_comments_metrics.json', buildMetricsTable, function(err) {console.log(err);});
-
-        //loadJSON('./Data/R2.2.0_comments.json', redrawAll, function(err) {console.log(err);});
-
         setupDefaultOptions();
 
         network = new vis.Network(container, data, options);
@@ -125,22 +152,6 @@
             resetExtraInfo();
             filterTable(node);
         });
-    }
-    
-    function loadJSON(path, success, error) {
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function () {
-          if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
-              success(JSON.parse(xhr.responseText));
-            }
-            else {
-              error(xhr);
-            }
-          }
-        };
-        xhr.open('GET', path, true);
-        xhr.send();
     }
     
     function displayEdgeData(selectionData) {

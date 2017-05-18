@@ -9,7 +9,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if(self.path == "/potentialFiles"):
             self.send_response(200)
-            self.wfile.write(listdir("../visualizationProject/public_html/Data"))
+            self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            files = listdir("../visualizationProject/public_html/Data")
+            self.wfile.write(str([file for file in files if file[-13:] != "_metrics.json"]))
         else:
             try:
                 file = open("../visualizationProject/public_html/Data" + self.path)

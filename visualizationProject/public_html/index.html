@@ -77,6 +77,8 @@
     var data = { nodes: nodes, edges: edges };
     var options;
     var network;
+    var doubleClickTime = 0;
+    var threshold = 200;
     
     initialize();
     
@@ -132,6 +134,7 @@
         network.on('click', handleClick);
 
         network.on('doubleClick', function(selectionData){
+            doubleClickTime = new Date();
             if(selectionData.nodes.length !== 0){
                 getHierarchy(selectionData);
             }
@@ -254,20 +257,27 @@
     }
     
     function handleClick(selectionData){
-        if(!(selectionData.edges.length === 1 && selectionData.nodes.length === 0 && options.layout.hierarchical.enabled)){
-            setupDefaultOptions();
-            network.setOptions(options);
-        }
-        if(selectionData.nodes.length === 0 && selectionData.edges.length === 0){
-            addBackRemovedEdgesAndNodes();
-            resetExtraInfo();
-            filterTable(null);
-        }else if(selectionData.nodes.length !== 0){
-            var selectedNode = nodes.get(selectionData.nodes[0]);
-            addBackRemovedEdgesAndNodes();
-            removeUnconnectedMembers(selectedNode);
-            resetExtraInfo();
-            filterTable(selectedNode);
+        var t0 = new Date();
+        if (t0 - doubleClickTime > threshold) {
+            setTimeout(function () {
+                if (t0 - doubleClickTime > threshold) {
+                    if(!(selectionData.edges.length === 1 && selectionData.nodes.length === 0 && options.layout.hierarchical.enabled)){
+                        setupDefaultOptions();
+                        network.setOptions(options);
+                    }
+                    if(selectionData.nodes.length === 0 && selectionData.edges.length === 0){
+                        addBackRemovedEdgesAndNodes();
+                        resetExtraInfo();
+                        filterTable(null);
+                    }else if(selectionData.nodes.length !== 0){
+                        var selectedNode = nodes.get(selectionData.nodes[0]);
+                        addBackRemovedEdgesAndNodes();
+                        removeUnconnectedMembers(selectedNode);
+                        resetExtraInfo();
+                        filterTable(selectedNode);
+                    }
+                }
+            },threshold);
         }
     }
     

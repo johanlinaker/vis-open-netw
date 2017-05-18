@@ -2,22 +2,27 @@ from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from SocketServer import ThreadingMixIn
 import threading
 import argparse
-import re
 
-
-class LocalData(object):
-    records = {}
-
+from os import listdir
 
 class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Credentials', 'true')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        file = open("../visualizationProject/public_html/Data/R2.2.0_comments.json")
-        self.wfile.write(file.read())
+        if(self.path == "/potentialFiles"):
+            self.send_response(200)
+            self.wfile.write(listdir("../visualizationProject/public_html/Data"))
+        else:
+            try:
+                file = open("../visualizationProject/public_html/Data" + self.path)
+            except IOError:
+                self.send_error(404, self.path + " does not exist.")
+                return
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(file.read())
         return
 
 
@@ -40,9 +45,6 @@ class SimpleHttpServer():
 
     def waitForThread(self):
         self.server_thread.join()
-
-    def addRecord(self, recordID, jsonEncodedRecord):
-        LocalData.records[recordID] = jsonEncodedRecord
 
     def stop(self):
         self.server.shutdown()

@@ -84,11 +84,15 @@
 
         $( "input.checkboxradio" ).checkboxradio();
         
-        $.getJSON("http://localhost:8080/", function(data, status, jqXHR){
+        $.getJSON("http://localhost:8080/R2.2.0_comments.json", function(data, status, jqXHR){
             redrawAll(JSON.parse(jqXHR.responseText));
         });
 
-        loadJSON('./Data/R2.2.0_comments_metrics.json', buildMetricsTable, function(err) {console.log(err);});
+        $.getJSON("http://localhost:8080/R2.2.0_comments_metrics.json", function(data, status, jqXHR){
+            buildMetricsTable(JSON.parse(jqXHR.responseText));
+        });
+        
+        //loadJSON('./Data/R2.2.0_comments_metrics.json', buildMetricsTable, function(err) {console.log(err);});
 
         //loadJSON('./Data/R2.2.0_comments.json', redrawAll, function(err) {console.log(err);});
 

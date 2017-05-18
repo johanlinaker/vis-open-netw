@@ -38,6 +38,10 @@
     h1 {
         text-align: center;
     }
+    
+    .ui-dialog-titlebar-close {
+        display: none;
+    }
   </style>
 </head>
 <body>
@@ -106,7 +110,9 @@
             });
         });
         
-        $( ".dialog" ).dialog();
+        $( ".dialog" ).dialog({
+            modal: true
+        });
         
         $( "select.selectmenu" )
                 .selectmenu()

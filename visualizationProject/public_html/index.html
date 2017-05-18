@@ -146,7 +146,7 @@
             var dataJq = $(data.target);
             var node = nodes.get(dataJq.html());
             
-            addBackRemovedEdgesAndNodes();
+            addBackRemovedEdgesAndNodes(node);
             
             if(node !== null){
                 removeUnconnectedMembers(node);
@@ -249,10 +249,23 @@
         }
     }
     
-    function addBackRemovedEdgesAndNodes(){
-        edges.add(removedEdges);
+    function addBackRemovedEdgesAndNodes(forNode){
+        if(forNode === undefined) {
+            edges.add(removedEdges);
+            removedEdges = [];
+        }else {
+            var stillRemovedEdges = [];
+            for(i = 0; i < removedEdges.length; i++){
+                if(removedEdges[i].from === forNode.id || removedEdges[i].to === forNode.id){
+                    edges.add(removedEdges[i]);
+                }else {
+                    stillRemovedEdges.push(removedEdges[i]);
+                }
+            }
+            removedEdges = stillRemovedEdges;
+        }
+        
         nodes.add(removedNodes);
-        removedEdges = [];
         removedNodes = [];
     }
     
@@ -261,23 +274,27 @@
         if (t0 - doubleClickTime > threshold) {
             setTimeout(function () {
                 if (t0 - doubleClickTime > threshold) {
-                    if(!(selectionData.edges.length === 1 && selectionData.nodes.length === 0 && options.layout.hierarchical.enabled)){
-                        setupDefaultOptions();
-                        network.setOptions(options);
-                    }
-                    if(selectionData.nodes.length === 0 && selectionData.edges.length === 0){
-                        addBackRemovedEdgesAndNodes();
-                        resetExtraInfo();
-                        filterTable(null);
-                    }else if(selectionData.nodes.length !== 0){
-                        var selectedNode = nodes.get(selectionData.nodes[0]);
-                        addBackRemovedEdgesAndNodes();
-                        removeUnconnectedMembers(selectedNode);
-                        resetExtraInfo();
-                        filterTable(selectedNode);
-                    }
+                    doClick(selectionData);
                 }
             },threshold);
+        }
+    }
+    
+    function doClick(selectionData) {
+        if(!(selectionData.edges.length === 1 && selectionData.nodes.length === 0 && options.layout.hierarchical.enabled)){
+            setupDefaultOptions();
+            network.setOptions(options);
+        }
+        if(selectionData.nodes.length === 0 && selectionData.edges.length === 0){
+            addBackRemovedEdgesAndNodes();
+            resetExtraInfo();
+            filterTable(null);
+        }else if(selectionData.nodes.length !== 0){
+            var selectedNode = nodes.get(selectionData.nodes[0]);
+            addBackRemovedEdgesAndNodes(selectedNode);
+            removeUnconnectedMembers(selectedNode);
+            resetExtraInfo();
+            filterTable(selectedNode);
         }
     }
     

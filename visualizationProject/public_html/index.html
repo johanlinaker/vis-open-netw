@@ -226,10 +226,11 @@
     var removedNodes = [];
     function removeUnconnectedMembers(mainNode){
         var safeNodes = new Set([]);
-        for(e in edges.get()){
-            var edge = edges.get(e);
+        var edgeArray = edges.get();
+        for(i = 0; i < edgeArray.length; i++){
+            var edge = edgeArray[i];
             if(mainNode.id !== edge.from && mainNode.id !== edge.to){
-                edges.remove(e);
+                edges.remove(edge.id);
                 removedEdges.push(edge);
             }else{
                 safeNodes.add(edge.from);

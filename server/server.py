@@ -12,11 +12,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            files = listdir("../visualizationProject/public_html/Data")
+            files = listdir("Data")
             self.wfile.write(str([file for file in files if file[-13:] != "_metrics.json"]))
         else:
             try:
-                file = open("../visualizationProject/public_html/Data" + self.path)
+                file = open("Data" + self.path)
             except IOError:
                 self.send_error(404, self.path + " does not exist.")
                 return

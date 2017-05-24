@@ -115,11 +115,13 @@ def calcWeights(issueData):
 
     issueData['weight'] = issueData['weight'].fillna(0)
 
-    issueData.to_csv("02_weightOutput.csv")
+    edges = issueData.copy()
+    edges.rename(columns={"organization": "from",
+                                "collabOrganization": "to"}, inplace=True)
 
     issueOutputFileName = "02_weightOutput"
     issueOutputFileCSVName = issueOutputFileName + ".csv"
-    issueData.to_csv(issueOutputFileCSVName)
+    edges.to_csv(issueOutputFileCSVName)
 
     with open(issueOutputFileCSVName) as f:
         reader = csv.DictReader(f)

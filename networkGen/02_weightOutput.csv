@@ -1,4 +1,4 @@
-,organization,organizationId,collabOrganization,collabOrganizationId,totNbrOfComments,nbrOfComments,weight
+,from,organizationId,to,collabOrganizationId,totNbrOfComments,nbrOfComments,weight
 0,360buy,73.0,360buy,73.0,13.0,5.0,0.38461538461538464
 1,360buy,73.0,cloudera,6.0,13.0,5.0,0.38461538461538464
 2,360buy,73.0,huawei,19.0,13.0,5.0,0.38461538461538464

@@ -74,6 +74,7 @@
 </div>
 <script type="text/javascript">
     var desiredMetricColumns;
+    var tableIdColumn;
     var gephiImported;
     var container = document.getElementById('mynetwork');
     var nodes = new vis.DataSet();
@@ -87,8 +88,9 @@
     initialize();
     
     function initialize() {
-        desiredMetricColumns = ["organization", "degreeOutBinary", "degreeOut", "degreeInBinary", "degreeIn"];
-
+        desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"];
+        tableIdColumn = desiredMetricColumns[0];
+        
         $( "#timeFilter" ).slider({
           range: true,
           min: 0,
@@ -208,27 +210,56 @@
                 tabCell.innerHTML = metricsJSON[i][col[j]];
             }
         }
+        
+        var numCol = 0;
+        $.each($("#metricsTable tbody tr th"), function(index,column){
+            if ($(column).html() === tableIdColumn) {
+                return false;
+            }else {
+                numCol += 1;
+            }
+        });
+        
+        $("#metricsTable tbody tr").each(function() {
+            var tr = $(this);
+            var td1 = tr.find('th:eq(0),td:eq(0)'); // indices are zero-based here
+            var td2 = tr.find('th:eq(' + numCol + '),td:eq(' + numCol + ')');
+            td2.detach().insertBefore(td1);
+        });
     }
     
-    function redrawAll(gephiJSON) {
-        if (gephiJSON.nodes === undefined) {
+    function redrawAll(parsedJson) {
+        /*if (gephiJSON.nodes === undefined) {
             gephiJSON = gephiImported;
         }
         else {
             gephiImported = gephiJSON;
-        }
+        }*/
 
         nodes.clear();
         edges.clear();
 
-        var parsed = vis.network.gephiParser.parseGephi(gephiJSON); 
+        //var parsed = vis.network.gephiParser.parseGephi(gephiJSON); 
 
-        parsed.edges.forEach(function(e){
+        var tmpNodeIds = new Set();
+        parsedJson.forEach(function(e){
             e.label = e.label.substr(0,4);
+            
+            tmpNodeIds.add(e.from);
+            tmpNodeIds.add(e.to);
         });
+        
+        var tmpNodes = [];
+        tmpNodeIds.forEach(function(id){
+            tmpNodes.push({
+                id : id,
+                label : id
+            });
+        });
+        
         // add the parsed data to the DataSets
-        nodes.add(parsed.nodes);
-        edges.add(parsed.edges);
+        nodes.add(tmpNodes);
+        edges.add(parsedJson);
     }
     
     var removedEdges = [];

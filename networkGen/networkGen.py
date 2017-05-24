@@ -117,7 +117,8 @@ def calcWeights(issueData):
 
     edges = issueData.copy()
     edges.rename(columns={"organization": "from",
-                                "collabOrganization": "to"}, inplace=True)
+                                "collabOrganization": "to",
+                                "weight": "label"}, inplace=True)
 
     issueOutputFileName = "02_weightOutput"
     issueOutputFileCSVName = issueOutputFileName + ".csv"

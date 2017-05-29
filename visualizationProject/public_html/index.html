@@ -53,14 +53,8 @@
 <div id="filterContainer">
     <h2>Time Filter: <input type="text" id="timeRange" readonly ></h2><div id="timeFilter"></div>
     <h2>Issue Type Filter: </h2>
-    <fieldset>
+    <fieldset id="issueTypeFieldset">
       <legend>Select Issue Types: </legend>
-      <label for="type1">Issue Type 1</label>
-      <input class="checkboxradio" type="checkbox" name="type1" id="type1" checked>
-      <label for="type2">Issue Type 2</label>
-      <input class="checkboxradio" type="checkbox" name="type2" id="type2" checked>
-      <label for="type3">Issue Type 3</label>
-      <input class="checkboxradio" type="checkbox" name="type3" id="type3" checked>
     </fieldset>
 </div>
 <div id="fileSelectDialog" class="dialog" title="File Selector">
@@ -102,8 +96,6 @@
         });
         $( "#timeRange" ).val( $( "#timeFilter" ).slider( "values", 0 ) +
           " - " + $( "#timeFilter" ).slider( "values", 1 ) );
-
-        $( "input.checkboxradio" ).checkboxradio();
         
         $.get("http://localhost:8080/potentialFiles", function(data, status, jqXHR){
             var newdata = data.slice(2,-2).split("', '");
@@ -120,18 +112,69 @@
                 .selectmenu()
                 .on("selectmenuselect", function(event, ui) {
                     $(event.currentTarget).parents(".dialog").dialog("close");
+
+                    $.ajax({ url: "http://localhost:8080/" + ui.item.value + "/issueTypes", 
+                        success: function(data, status, jqXHR) {
+                            $.each(data.kind, function(index, issueType){
+                                $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType + ">" + issueType + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType + " id=" + issueType + ">");
+                            });
+                            $( "input.checkboxradio" ).checkboxradio()
+                                    .change(function(){
+                                        resetData();
+                            });
+                    },
+                        async: false }
+                    );
+                    
                     initializeNetwork(ui.item.value);
         });
     }
     
-    function initializeNetwork(selection) {
-        $.getJSON("http://localhost:8080/" + selection + ".json", function(data, status, jqXHR){
+    function getTypeFilters() {
+        var issueTypesString = "";
+        $.each($("#filterContainer #issueTypeFieldset input:checked"), function(index, issueTypeCheckbox){
+            issueTypesString = issueTypesString + issueTypeCheckbox.id + "+";
+        });
+        issueTypesString = issueTypesString.slice(0,-1);
+        
+        return issueTypesString !== "" ? "?checked=" + issueTypesString : issueTypesString;
+    }
+    
+    var fileSelection;
+    function resetData(selection, initialSetup) {
+        if(selection) {
+            fileSelection = selection;
+        }else {
+            selection = fileSelection;
+        }
+        
+        $.getJSON("http://localhost:8080/" + selection + getTypeFilters(), function(data, status, jqXHR){
             redrawAll(JSON.parse(jqXHR.responseText));
         });
 
-        $.getJSON("http://localhost:8080/" + selection + "_metrics.json", function(data, status, jqXHR){
+        $.getJSON("http://localhost:8080/" + selection + "_metrics" + getTypeFilters(), function(data, status, jqXHR){
             buildMetricsTable(JSON.parse(jqXHR.responseText));
+            
+                var numCol = 0;
+                $.each($("#metricsTable tbody tr th"), function(index,column){
+                    if ($(column).html() === tableIdColumn) {
+                        return false;
+                    }else {
+                        numCol += 1;
+                    }
+                });
+
+                $("#metricsTable tbody tr").each(function() {
+                    var tr = $(this);
+                    var td1 = tr.find('th:eq(0),td:eq(0)'); // indices are zero-based here
+                    var td2 = tr.find('th:eq(' + numCol + '),td:eq(' + numCol + ')');
+                    td2.detach().insertBefore(td1);
+                });
         });
+    }
+
+    function initializeNetwork(selection) {
+        resetData(selection, true);
         
         setupDefaultOptions();
 
@@ -189,6 +232,9 @@
 
         // CREATE DYNAMIC TABLE.
         var table = document.getElementById("metricsTable");
+        while (table.firstChild) {
+            table.removeChild(table.firstChild);
+        }
 
         // CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
 
@@ -210,24 +256,10 @@
                 tabCell.innerHTML = metricsJSON[i][col[j]];
             }
         }
-        
-        var numCol = 0;
-        $.each($("#metricsTable tbody tr th"), function(index,column){
-            if ($(column).html() === tableIdColumn) {
-                return false;
-            }else {
-                numCol += 1;
-            }
-        });
-        
-        $("#metricsTable tbody tr").each(function() {
-            var tr = $(this);
-            var td1 = tr.find('th:eq(0),td:eq(0)'); // indices are zero-based here
-            var td2 = tr.find('th:eq(' + numCol + '),td:eq(' + numCol + ')');
-            td2.detach().insertBefore(td1);
-        });
     }
     
+    var removedEdges = [];
+    var removedNodes = [];
     function redrawAll(parsedJson) {
         /*if (gephiJSON.nodes === undefined) {
             gephiJSON = gephiImported;
@@ -238,6 +270,8 @@
 
         nodes.clear();
         edges.clear();
+        removedEdges = [];
+        removedNodes = [];
 
         //var parsed = vis.network.gephiParser.parseGephi(gephiJSON); 
 
@@ -261,9 +295,7 @@
         nodes.add(tmpNodes);
         edges.add(parsedJson);
     }
-    
-    var removedEdges = [];
-    var removedNodes = [];
+ 
     function removeUnconnectedMembers(mainNode){
         var safeNodes = new Set([]);
         var edgeArray = edges.get();

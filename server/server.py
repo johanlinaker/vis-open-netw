@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 import threading
 import argparse
+import urllib.parse as urlparse
 
 import pandas as pd
 import networkx as nx
@@ -12,13 +13,15 @@ import csv
 import json
 import os
 
-def readDB(db):
+def setDB(dbname):
     pymysql.install_as_MySQLdb()
-    db = pymysql.connect(host = "vm23.cs.lth.se",
-                         user = "kylec",
-                         passwd = "oc12UnBjNT",
-                         db = db)
+    db = pymysql.connect(host="vm23.cs.lth.se",
+                         user="kylec",
+                         passwd="oc12UnBjNT",
+                         db=dbname)
+    return db
 
+def readDB(db, issueTypes):
     cur = db.cursor()
 
     # Nbr of comments per user and issue
@@ -32,11 +35,12 @@ def readDB(db):
                 jira_issue_comments c,
                 jira_issues i
             WHERE
-                c.issueId = i.id
-            GROUP BY
-                c.author, c.issueId
-            ORDER BY
-                c.author"""
+                c.issueId = i.id """
+
+    if(issueTypes is not None):
+        query = query + """ AND i.kind IN (""" + issueTypes + """) """
+
+    query = query + """ GROUP BY c.author, c.issueId ORDER BY c.author"""
 
     issueData = pd.read_sql_query(query, db)
 
@@ -172,8 +176,6 @@ def genNetwork(issueData):
                                                     2: "closeness",
                                                     3: "eigenvector"})
 
-    centralityData.to_csv("03_centralityOutput.csv")
-
     centralityOutputFileName = "03_centralityOutput"
     centralityOutputFileCSVName = centralityOutputFileName + ".csv"
     centralityData.to_csv(centralityOutputFileCSVName)
@@ -190,8 +192,9 @@ def genNetwork(issueData):
 
 class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        db = setDB("kylec")
         if(self.path == "/potentialFiles"):
-            res = readDB("kylec")
+            res = readDB(db, None)
             res = calcWeights(res)
             res = genNetwork(res)
             self.send_response(200)
@@ -201,18 +204,35 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             files = os.listdir("Data")
             self.wfile.write(bytes(str([file for file in files if file[-13:] != "_metrics.json"]), 'UTF-8'))
         else:
-            try:
-                file = open("Data" + self.path)
-            except IOError:
-                self.send_error(404, self.path + " does not exist.")
-                return
+            parsedUrl = urlparse.urlparse(self.path)
+            splitPath = parsedUrl.path.lstrip("/").split("/")
 
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(bytes(file.read(), 'UTF-8'))
+
+            if(len(splitPath) > 1 and splitPath[1] == "issueTypes"):
+                query = "SELECT DISTINCT kind FROM jira_issues;"
+                issueTypes = pd.read_sql_query(query, db)
+
+                self.wfile.write(bytes(issueTypes.to_json(), 'UTF-8'))
+            else:
+                if ('checked' in urlparse.parse_qs(parsedUrl.query).keys()):
+                    issueTypes = "'" + urlparse.parse_qs(parsedUrl.query)['checked'][0].replace(" ", "','") + "'"
+                    res = readDB(db, issueTypes)
+                    res = calcWeights(res)
+                    res = genNetwork(res)
+
+                    try:
+                        file = open("Data/" + splitPath[0] + ".json")
+                    except IOError:
+                        self.send_error(404, self.path + " does not exist.")
+                        return
+                    self.wfile.write(bytes(file.read(), 'UTF-8'))
+                else:
+                    self.wfile.write(bytes(' ', 'UTF-8'))
         return
 
 

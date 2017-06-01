@@ -39,7 +39,8 @@ def readDB(db, issueTypes = None, creationFromDate = None, creationToDate = None
                 c.issueId = i.id """
 
     if(issueTypes is not None):
-        query = query + """ AND i.kind IN (""" + issueTypes + """) """
+        query = query + """ AND i.kind IN (%s) """
+        params.append(issueTypes)
     if(creationFromDate is not None):
         query = query + """ AND i.created >= %s"""
         params.append(creationFromDate)
@@ -235,7 +236,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 parsedQuery = urlparse.parse_qs(parsedUrl.query)
                 keys = parsedQuery.keys()
                 if (len(keys) != 0 and 'issueTypes' in keys): # if there are no issueTypes then there is no response
-                    issueTypes = "'" + parsedQuery['issueTypes'][0].replace(" ", "','") + "'"
+                    issueTypes = parsedQuery['issueTypes'][0].split()
                     creationFromDate = parsedQuery['creationFromDate'][0] if 'creationFromDate' in keys else None
                     creationToDate = parsedQuery['creationToDate'][0] if 'creationToDate' in keys else None
                     res = readDB(db, issueTypes, creationFromDate, creationToDate)

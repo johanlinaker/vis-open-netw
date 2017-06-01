@@ -24,6 +24,7 @@ def setDB(dbname):
 def readDB(db, issueTypes = None, creationFromDate = None, creationToDate = None):
     cur = db.cursor()
 
+    params = []
     # Nbr of comments per user and issue
     # author | issueId | anchor | nbrOfComments
     query = """SELECT
@@ -40,13 +41,15 @@ def readDB(db, issueTypes = None, creationFromDate = None, creationToDate = None
     if(issueTypes is not None):
         query = query + """ AND i.kind IN (""" + issueTypes + """) """
     if(creationFromDate is not None):
-        query = query + """ AND i.created >= '""" + creationFromDate + "'"
+        query = query + """ AND i.created >= %s"""
+        params.append(creationFromDate)
     if(creationToDate is not None):
-        query = query + """ AND i.created < '""" + creationToDate + "'"
+        query = query + """ AND i.created < %s"""
+        params.append(creationToDate)
 
     query = query + """ GROUP BY c.author, c.issueId ORDER BY c.author"""
 
-    issueData = pd.read_sql_query(query, db)
+    issueData = pd.read_sql_query(query, db, params=params)
 
     # Issue id:s per release
     # releaseData = pd.read_csv("releaseData.csv", header=0, sep=",")

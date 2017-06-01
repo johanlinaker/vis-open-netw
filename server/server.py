@@ -39,8 +39,8 @@ def readDB(db, issueTypes = None, creationFromDate = None, creationToDate = None
                 c.issueId = i.id """
 
     if(issueTypes is not None):
-        query = query + """ AND i.kind IN (%s) """
-        params.append(issueTypes)
+        query = query + """ AND i.kind IN (""" + ','.join(["%s"] * len(issueTypes)) + """) """
+        params += issueTypes
     if(creationFromDate is not None):
         query = query + """ AND i.created >= %s"""
         params.append(creationFromDate)

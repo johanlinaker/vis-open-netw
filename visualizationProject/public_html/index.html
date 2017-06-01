@@ -42,6 +42,10 @@
     .ui-dialog-titlebar-close {
         display: none;
     }
+    
+    .noMargin {
+        margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -51,7 +55,12 @@
     <table id="metricsTable"></table>
 </div>
 <div id="filterContainer">
-    <h2>Time Filter: <input type="text" id="timeRange" readonly ></h2><div id="timeFilter"></div>
+    <h2>Time Filter: </h2>
+    <h3 class="noMargin">Issue Creation Dates: </h3>
+    <label for="creationFrom">From: </label>
+    <input type="text" id="creationFrom" name="from">
+    <label for="creationTo">To: </label>
+    <input type="text" id="creationTo" name="to">
     <h2>Issue Type Filter: </h2>
     <fieldset id="issueTypeFieldset">
       <legend>Select Issue Types: </legend>
@@ -78,24 +87,13 @@
     var network;
     var doubleClickTime = 0;
     var threshold = 200;
+    var dateFormat = "yy-mm-dd";
     
     initialize();
     
     function initialize() {
         desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"];
         tableIdColumn = desiredMetricColumns[0];
-        
-        $( "#timeFilter" ).slider({
-          range: true,
-          min: 0,
-          max: 100,
-          values: [ 75, 99 ],
-          slide: function( event, ui ) {
-            $( "#timeRange" ).val( ui.values[ 0 ] + " - " + ui.values[ 1 ] );
-          }
-        });
-        $( "#timeRange" ).val( $( "#timeFilter" ).slider( "values", 0 ) +
-          " - " + $( "#timeFilter" ).slider( "values", 1 ) );
         
         $.get("http://localhost:8080/potentialFiles", function(data, status, jqXHR){
             var newdata = data.slice(2,-2).split("', '");
@@ -112,21 +110,47 @@
                 .selectmenu()
                 .on("selectmenuselect", function(event, ui) {
                     $(event.currentTarget).parents(".dialog").dialog("close");
-
-                    $.ajax({ url: "http://localhost:8080/" + ui.item.value + "/issueTypes", 
-                        success: function(data, status, jqXHR) {
-                            $.each(data.kind, function(index, issueType){
-                                $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType + ">" + issueType + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType + " id=" + issueType + ">");
-                            });
-                            $( "input.checkboxradio" ).checkboxradio()
-                                    .change(function(){
+            
+                    $.when($.get("http://localhost:8080/" + ui.item.value + "/issueTypes", function(data, status, jqXHR) {
+                                $.each(data.kind, function(index, issueType){
+                                    $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType + ">" + issueType + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType + " id=" + issueType + ">");
+                                });
+                                $( "input.checkboxradio" ).checkboxradio()
+                                        .change(function(){
+                                            resetData();
+                                });
+                            }),
+                            $.get("http://localhost:8080/" + ui.item.value + "/dates", function(data, status, jqXHR) {
+                                var minDate = new Date(data[0].creationMin);
+                                var maxDate = new Date(data[0].creationMax);
+                                maxDate.setDate(maxDate.getDate() + 1);
+                                var from = $( "#creationFrom" )
+                                    .datepicker({
+                                        minDate: minDate,
+                                        maxDate: maxDate,
+                                        defaultDate: minDate,
+                                        changeMonth: true,
+                                        changeYear: true,
+                                        dateFormat: dateFormat
+                                    })
+                                    .on( "change", function() {
+                                        to.datepicker( "option", "minDate", getDate( this ) );
                                         resetData();
-                            });
-                    },
-                        async: false }
-                    );
-                    
-                    initializeNetwork(ui.item.value);
+                                    }),
+                                    to = $( "#creationTo" ).datepicker({
+                                        minDate: minDate,
+                                        maxDate: maxDate,
+                                        defaultDate: maxDate,
+                                        changeMonth: true,
+                                        changeYear: true,
+                                        dateFormat: dateFormat
+                                    })
+                                    .on( "change", function() {
+                                        from.datepicker( "option", "maxDate", getDate( this ) );
+                                        resetData();
+                                    });
+                            }))
+                    .then(initializeNetwork(ui.item.value));
         });
     }
     
@@ -137,44 +161,63 @@
         });
         issueTypesString = issueTypesString.slice(0,-1);
         
-        return issueTypesString !== "" ? "?checked=" + issueTypesString : issueTypesString;
+        return issueTypesString !== "" ? "&issueTypes=" + issueTypesString : issueTypesString;
+    }
+    
+    function getDateFilters() {
+        return "&creationFromDate=" + encodeURIComponent($("#creationFrom").val()) + "&creationToDate=" + encodeURIComponent($("#creationTo").val());
+    }
+    
+    function getFilters() {
+        var filters = (getTypeFilters() + getDateFilters()).substring(1);//slice off excess '&'
+        return "?" + filters;
     }
     
     var fileSelection;
-    function resetData(selection, initialSetup) {
+    function resetData(selection) {
+        edges.clear();
+        nodes.clear();
+        
+        var table = document.getElementById("metricsTable");
+        while (table.firstChild) {
+            table.removeChild(table.firstChild);
+        }
+        
         if(selection) {
             fileSelection = selection;
         }else {
             selection = fileSelection;
         }
         
-        $.getJSON("http://localhost:8080/" + selection + getTypeFilters(), function(data, status, jqXHR){
+        $.getJSON("http://localhost:8080/" + selection + getFilters(), function(data, status, jqXHR){
             redrawAll(JSON.parse(jqXHR.responseText));
         });
 
-        $.getJSON("http://localhost:8080/" + selection + "_metrics" + getTypeFilters(), function(data, status, jqXHR){
+        $.getJSON("http://localhost:8080/" + selection + "_metrics" + getFilters(), function(data, status, jqXHR){
             buildMetricsTable(JSON.parse(jqXHR.responseText));
             
-                var numCol = 0;
-                $.each($("#metricsTable tbody tr th"), function(index,column){
-                    if ($(column).html() === tableIdColumn) {
-                        return false;
-                    }else {
-                        numCol += 1;
-                    }
-                });
+            var numCol = 0;
+            $.each($("#metricsTable tbody tr th"), function(index,column){
+                if ($(column).html() === tableIdColumn) {
+                    return false;
+                }else {
+                    numCol += 1;
+                }
+            });
 
+            if(numCol > 0) {
                 $("#metricsTable tbody tr").each(function() {
                     var tr = $(this);
                     var td1 = tr.find('th:eq(0),td:eq(0)'); // indices are zero-based here
                     var td2 = tr.find('th:eq(' + numCol + '),td:eq(' + numCol + ')');
                     td2.detach().insertBefore(td1);
                 });
+            }
         });
     }
 
     function initializeNetwork(selection) {
-        resetData(selection, true);
+        resetData(selection);
         
         setupDefaultOptions();
 
@@ -232,9 +275,6 @@
 
         // CREATE DYNAMIC TABLE.
         var table = document.getElementById("metricsTable");
-        while (table.firstChild) {
-            table.removeChild(table.firstChild);
-        }
 
         // CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
 
@@ -390,6 +430,17 @@
                 orgTdJq.parent().css("font-weight", "bold");
             }
         });
+    }
+    
+    function getDate( element ) {
+        var date;
+        try {
+          date = $.datepicker.parseDate( dateFormat, element.value );
+        } catch( error ) {
+          date = null;
+        }
+
+        return date;
     }
     
     function resetExtraInfo(){

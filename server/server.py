@@ -21,7 +21,7 @@ def setDB(dbname):
                          db=dbname)
     return db
 
-def readDB(db, issueTypes):
+def readDB(db, issueTypes = None, creationFromDate = None, creationToDate = None):
     cur = db.cursor()
 
     # Nbr of comments per user and issue
@@ -39,6 +39,10 @@ def readDB(db, issueTypes):
 
     if(issueTypes is not None):
         query = query + """ AND i.kind IN (""" + issueTypes + """) """
+    if(creationFromDate is not None):
+        query = query + """ AND i.created >= '""" + creationFromDate + "'"
+    if(creationToDate is not None):
+        query = query + """ AND i.created < '""" + creationToDate + "'"
 
     query = query + """ GROUP BY c.author, c.issueId ORDER BY c.author"""
 
@@ -194,7 +198,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         db = setDB("kylec")
         if(self.path == "/potentialFiles"):
-            res = readDB(db, None)
+            res = readDB(db)
             res = calcWeights(res)
             res = genNetwork(res)
             self.send_response(200)
@@ -213,15 +217,25 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
-            if(len(splitPath) > 1 and splitPath[1] == "issueTypes"):
-                query = "SELECT DISTINCT kind FROM jira_issues;"
-                issueTypes = pd.read_sql_query(query, db)
+            if(len(splitPath) > 1):
+                if(splitPath[1] == "issueTypes"):
+                    query = "SELECT DISTINCT kind FROM jira_issues;"
+                    issueTypes = pd.read_sql_query(query, db)
 
-                self.wfile.write(bytes(issueTypes.to_json(), 'UTF-8'))
+                    self.wfile.write(bytes(issueTypes.to_json(), 'UTF-8'))
+                elif(splitPath[1] == "dates"):
+                    query = "SELECT MIN(created) as creationMin, MAX(created) as creationMax FROM jira_issues;"
+                    dates = pd.read_sql_query(query, db)
+
+                    self.wfile.write(bytes(dates.to_json(orient='records'), 'UTF-8'))
             else:
-                if ('checked' in urlparse.parse_qs(parsedUrl.query).keys()):
-                    issueTypes = "'" + urlparse.parse_qs(parsedUrl.query)['checked'][0].replace(" ", "','") + "'"
-                    res = readDB(db, issueTypes)
+                parsedQuery = urlparse.parse_qs(parsedUrl.query)
+                keys = parsedQuery.keys()
+                if (len(keys) != 0 and 'issueTypes' in keys): # if there are no issueTypes then there is no response
+                    issueTypes = "'" + parsedQuery['issueTypes'][0].replace(" ", "','") + "'"
+                    creationFromDate = parsedQuery['creationFromDate'][0] if 'creationFromDate' in keys else None
+                    creationToDate = parsedQuery['creationToDate'][0] if 'creationToDate' in keys else None
+                    res = readDB(db, issueTypes, creationFromDate, creationToDate)
                     res = calcWeights(res)
                     res = genNetwork(res)
 

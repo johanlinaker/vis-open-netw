@@ -8,10 +8,16 @@ import pandas as pd
 import networkx as nx
 # import matplotlib.pyplot as plt
 import pymysql
+from perceval.backends.core import jira as percJira
 
 import csv
 import json
 import os
+
+from datetime import datetime
+import urllib
+
+import py2neo
 
 def setDB(dbname):
     pymysql.install_as_MySQLdb()
@@ -21,7 +27,65 @@ def setDB(dbname):
                          db=dbname)
     return db
 
-def readDB(db, issueTypes = None, creationFromDate = None, creationToDate = None):
+def populateDB(db, url, project, fromDateTime):
+    db.issues.drop()
+
+    perceval = percJira.Jira(url, project=project)
+    issues = perceval.fetch(from_date=fromDateTime)
+    for issue in issues:
+        db.issues.insert_one(issue['data'])
+
+def populateNeoDB(graph, url, project, fromDateTime):
+    # Connect to graph and add constraints.
+    graph.delete_all()
+    graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
+
+    perceval = percJira.Jira(url, project=project)
+    issues = perceval.fetch(from_date=fromDateTime)
+
+    buf = '{\n\"items\": ['
+    first = True
+    for issue in issues:
+        if not first:
+            buf += ','
+        first = False
+        buf += json.dumps(issue['data'])
+    buf += ']\n}'
+
+
+    # Build query.
+    query = """
+            WITH {json} as data
+            UNWIND data.items as i
+            MERGE (issue:Issue {id:i.id}) ON CREATE
+              SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created
+            
+            FOREACH (comm IN i.fields.comment.comments |
+                MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
+                MERGE (comment)-[:ON]->(issue)
+                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName
+                MERGE (author)-[:CREATED]->(comment)
+            )
+                """
+
+    # Send Cypher query.
+    graph.run(query, parameters={"json": json.loads(buf)})
+
+def setOrgs(graph, orgData):
+    for user in orgData:
+        query = "MATCH (n:User) WHERE n.key = '" + user.decode("utf-8") + "' SET n.organization = '" + orgData[user][0].decode("utf-8") + "'"
+
+        graph.run(query)
+
+    query = """
+    MATCH (n:User) WHERE n.organization IS NULL
+    SET n.organization = 'undefined'
+    """
+
+    graph.run(query)
+
+
+def readDB(graph, issueTypes = None, creationFromDate = None, creationToDate = None):
     cur = db.cursor()
 
     params = []
@@ -200,46 +264,48 @@ def genNetwork(issueData):
 
 class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        db = setDB("kylec")
-        if(self.path == "/potentialFiles"):
-            res = readDB(db)
-            res = calcWeights(res)
-            res = genNetwork(res)
+        graph = py2neo.Graph("http://neo4j:lund101@localhost:7474/db/data/")
+
+        parsedUrl = urlparse.urlparse(self.path)
+        splitPath = parsedUrl.path.lstrip("/").split("/")
+        parsedQuery = urlparse.parse_qs(parsedUrl.query)
+        keys = parsedQuery.keys()
+
+        if(len(splitPath) == 2 and splitPath[0] == 'quest'):
+            populateNeoDB(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y')) # may need to decode splitPath[1], fromDate
             self.send_response(200)
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            files = os.listdir("Data")
-            self.wfile.write(bytes(str([file for file in files if file[-13:] != "_metrics.json"]), 'UTF-8'))
+            self.wfile.write(bytes('', 'UTF-8')) # may not be needed - just need an OK
         else:
-            parsedUrl = urlparse.urlparse(self.path)
-            splitPath = parsedUrl.path.lstrip("/").split("/")
-
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
-            if(len(splitPath) > 1):
-                if(splitPath[1] == "issueTypes"):
-                    query = "SELECT DISTINCT kind FROM jira_issues;"
-                    issueTypes = pd.read_sql_query(query, db)
+            if(splitPath[0] == "issueTypes"):
+                query = "MATCH (n:Issue) RETURN DISTINCT n.type AS type"
+                issueTypes = graph.run(query) # The extracted data can then be easily passed into an external data handler such as a pandas.DataFrame for subsequent processing
 
-                    self.wfile.write(bytes(issueTypes.to_json(), 'UTF-8'))
-                elif(splitPath[1] == "dates"):
-                    query = "SELECT MIN(created) as creationMin, MAX(created) as creationMax FROM jira_issues;"
-                    dates = pd.read_sql_query(query, db)
+                self.wfile.write(bytes(json.dumps(issueTypes.data()), 'UTF-8'))
+            elif(splitPath[0] == "dates"):
+                query = "MATCH (n:Issue) RETURN MIN(n.createDate) AS creationMin, MAX(n.createDate) AS creationMax"
+                dates = graph.run(query)
 
-                    self.wfile.write(bytes(dates.to_json(orient='records'), 'UTF-8'))
+                self.wfile.write(bytes(json.dumps(dates.data()), 'UTF-8'))
+            elif(splitPath[0] == "users"):
+                query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName"
+                users = graph.run(query)
+
+                self.wfile.write(bytes(json.dumps(users.data()), 'UTF-8'))
             else:
-                parsedQuery = urlparse.parse_qs(parsedUrl.query)
-                keys = parsedQuery.keys()
                 if (len(keys) != 0 and 'issueTypes' in keys): # if there are no issueTypes then there is no response
                     issueTypes = parsedQuery['issueTypes'][0].split()
                     creationFromDate = parsedQuery['creationFromDate'][0] if 'creationFromDate' in keys else None
                     creationToDate = parsedQuery['creationToDate'][0] if 'creationToDate' in keys else None
-                    res = readDB(db, issueTypes, creationFromDate, creationToDate)
+                    res = readDB(graph, issueTypes, creationFromDate, creationToDate)
                     res = calcWeights(res)
                     res = genNetwork(res)
 
@@ -252,6 +318,17 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 else:
                     self.wfile.write(bytes(' ', 'UTF-8'))
         return
+
+    def do_POST(self):
+        graph = py2neo.Graph("http://neo4j:lund101@localhost:7474/db/data/")
+
+        parsedUrl = urlparse.urlparse(self.path)
+        splitPath = parsedUrl.path.lstrip("/").split("/")
+
+        if(splitPath[0] == "usersToOrgs"):
+            orgData = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
+
+            setOrgs(graph, orgData)
 
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

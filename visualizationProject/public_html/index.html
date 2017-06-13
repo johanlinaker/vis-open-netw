@@ -31,6 +31,9 @@
         padding: 0;
         padding-top: 5px;
     }
+    #setOrgTable {
+        height: auto;
+    }
     .issueTypeFilter {
         margin: 10px;
         margin-left: 0;
@@ -66,14 +69,40 @@
       <legend>Select Issue Types: </legend>
     </fieldset>
 </div>
-<div id="fileSelectDialog" class="dialog" title="File Selector">
-  <form action="#">
-    <fieldset>
-      <label for="fileNameSelector">Select a file</label>
-      <select name="fileName" id="fileNameSelector" class="selectmenu">
-      </select>
-    </fieldset>
+<div id="jiraUrlDialog" class="dialog" title="JIRA URL">
+  <form>
+    <label for="jiraUrlEntry">Enter a JIRA URL</label>
+    <input name="jiraUrl" id="jiraUrlEntry"/>
+    <label for="jiraProjectEntry">Enter a Project</label>
+    <input name="jiraPoject" id="jiraProjectEntry"/>
+    <label for="jiraFromDateEntry">Enter a from date (based on updated date)</label>
+    <input type="text" id="jiraFromDateEntry" name="jiraFromDate">
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit">
   </form>
+</div>
+
+<div id='setOrganizations' class="dialog" style="display:none;" title="Set Organizations">
+    <form>
+        <table id="setOrgTable">
+            <thead>
+                <tr>
+                    <th>
+                        Username
+                    </th>
+                    <th>
+                        Display Name
+                    </th>
+                    <th>
+                        Organization
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                
+            </tbody>
+        </table>
+        <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit">
+    </form>
 </div>
 <script type="text/javascript">
     var desiredMetricColumns;
@@ -95,32 +124,56 @@
         desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"];
         tableIdColumn = desiredMetricColumns[0];
         
-        $.get("http://localhost:8080/potentialFiles", function(data, status, jqXHR){
-            var newdata = data.slice(2,-2).split("', '");
-            $.each(data.slice(2,-2).split("', '"), function(index, file){
-                $("#fileNameSelector").append("<option>" + file.slice(0,-5) + "</option>");
-            });
-        });
-        
-        $( ".dialog" ).dialog({
+        $( "#jiraUrlDialog.dialog" ).dialog({
             modal: true
         });
         
-        $( "select.selectmenu" )
-                .selectmenu()
-                .on("selectmenuselect", function(event, ui) {
-                    $(event.currentTarget).parents(".dialog").dialog("close");
+        $( "#jiraFromDateEntry" ).datepicker({changeMonth: true,
+                                        changeYear: true,
+                                        dateFormat: dateFormat});
+        
+        $( "#jiraUrlDialog>form" )
+                .on("submit", function(event, ui) {
+                    event.preventDefault();
             
-                    $.when($.get("http://localhost:8080/" + ui.item.value + "/issueTypes", function(data, status, jqXHR) {
-                                $.each(data.kind, function(index, issueType){
-                                    $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType + ">" + issueType + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType + " id=" + issueType + ">");
+                    var url = $( "#jiraUrlEntry" ).val();
+                    var project = $( "#jiraProjectEntry" ).val();
+                    var fromDate = $( "#jiraFromDateEntry" ).val();
+
+                    $(event.currentTarget).parents(".dialog").dialog("close");
+                    
+                    $.ajax("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), {async : false}); //Change to post later on?
+                    
+                    $.when($.get("http://localhost:8080/users", function(data, status, jqXHR){
+                                $.each(data, function(index, user){
+                                    $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input/></td></tr>");
+                                });
+                                
+                                $( "#setOrganizations.dialog" ).dialog({
+                                    modal: true,
+                                    width: "445px"
+                                }).on("submit", function(event, ui){
+                                    event.preventDefault();
+                                    
+                                    var data = {};
+                                    $("#setOrgTable>tbody>tr").each(function() {
+                                        var key = $(this).find("td").first().html();
+                                        var value = $(this).find("input").val();
+                                        data[key] = value;
+                                    });
+                                    $.ajax("http://localhost:8080/usersToOrgs", {data: data, type: "POST", async: false });
+                                });
+                            }),
+                            $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
+                                $.each(data, function(index, issueType){
+                                    $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
                                 });
                                 $( "input.checkboxradio" ).checkboxradio()
                                         .change(function(){
                                             resetData();
                                 });
                             }),
-                            $.get("http://localhost:8080/" + ui.item.value + "/dates", function(data, status, jqXHR) {
+                            $.get("http://localhost:8080/dates", function(data, status, jqXHR) {
                                 var minDate = new Date(data[0].creationMin);
                                 var maxDate = new Date(data[0].creationMax);
                                 maxDate.setDate(maxDate.getDate() + 1);
@@ -150,7 +203,7 @@
                                         resetData();
                                     });
                             }))
-                    .then(initializeNetwork(ui.item.value));
+                    .then(initializeNetwork(url));
         });
     }
     
@@ -217,7 +270,7 @@
     }
 
     function initializeNetwork(selection) {
-        resetData(selection);
+        resetData(encodeURIComponent(selection));
         
         setupDefaultOptions();
 

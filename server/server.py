@@ -296,7 +296,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
                 self.wfile.write(bytes(json.dumps(dates.data()), 'UTF-8'))
             elif(splitPath[0] == "users"):
-                query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName"
+                query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.organization as organization"
                 users = graph.run(query)
 
                 self.wfile.write(bytes(json.dumps(users.data()), 'UTF-8'))

@@ -34,11 +34,32 @@
     #setOrgTable {
         height: auto;
     }
-    #jiraUrlDialog input {
+    #jiraUrlDialog div>input {
         display: block;
     }
     #jiraUrlDialog input.ui-button {
         margin-top: 5px;
+    }
+    #navBar {
+        width: 98%;
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid #e7e7e7;
+        background-color: #f3f3f3;
+    }
+    #navBar li {
+        display: inline;
+        color: #666;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+        border-right: 2px;
+    }
+    #navBar li:hover {
+        background-color: #ddd;
+        cursor: pointer;
     }
     .issueTypeFilter {
         margin: 10px;
@@ -50,12 +71,30 @@
     .noMargin {
         margin: 0;
     }
+    .loader {
+        border: 5px solid #f3f3f3; /* Light grey */
+        border-top: 5px solid #3498db; /* Blue */
+        border-radius: 50%;
+        width: 15px;
+        height: 15px;
+        animation: spin 2s linear infinite;
+        display: inline-block;
+        margin-bottom: -10px;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
     h1 {
         text-align: center;
     }
   </style>
+  <title>Network Visualization</title>
 </head>
 <body>
+<ul id="navBar">
+    <li id="editUserOrgs">Edit User Organizations</li>
+</ul>
 <div id="mynetwork"></div>
 <div id="extraInfoContainer">
     <h1 style="display:none;"></h1>
@@ -87,7 +126,7 @@
     <label for="jiraFromDateEntry">Enter a From Date (based on updated date):</label>
     <input type="text" id="jiraFromDateEntry" name="jiraFromDate">
     </div>
-    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit">
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
   </form>
 </div>
 
@@ -111,7 +150,7 @@
                 
             </tbody>
         </table>
-        <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit">
+        <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
     </form>
 </div>
 <script type="text/javascript">
@@ -134,96 +173,120 @@
         desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"];
         tableIdColumn = desiredMetricColumns[0];
         
+        $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
+        
         $( "#jiraUrlDialog.dialog" ).dialog({
             modal: true
         });
         
         $( "#jiraFromDateEntry" ).datepicker({changeMonth: true,
-                                        changeYear: true,
-                                        dateFormat: dateFormat});
+                                        changeYear: true});
         
         $( "#jiraUrlDialog>form" )
                 .on("submit", function(event, ui) {
                     event.preventDefault();
             
+                    $("#jiraUrlDialog .loader").css("display", "");
+            
                     var url = $( "#jiraUrlEntry" ).val();
                     var project = $( "#jiraProjectEntry" ).val();
                     var fromDate = $( "#jiraFromDateEntry" ).val();
+                    
+                    $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function() {
+                        $(event.currentTarget).parents(".dialog").dialog("close");
+                        
+                        $.get("http://localhost:8080/users", function(data, status, jqXHR) {
+                            data.sort(function(a,b) {
+                                return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
+                            });
 
-                    $(event.currentTarget).parents(".dialog").dialog("close");
-                    
-                    $.ajax("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), {async : false}); //Change to post later on?
-                    
-                    $.get("http://localhost:8080/users", function(data, status, jqXHR){
-                        data.sort(function(a,b){
-                            return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
+                            $.each(data, function(index, user) {
+                                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
+                            });
+
+                            $( "#setOrganizations.dialog" ).dialog({
+                                modal: true,
+                                width: "445px"
+                            }).on("submit", function(event, ui) {
+                                event.preventDefault();
+
+                                $("#setOrganizations .loader").css("display", "");
+
+                                var data = {};
+                                $("#setOrgTable>tbody>tr").each(function() {
+                                    var key = $(this).find("td").first().html();
+                                    var value = $(this).find("input").val();
+                                    data[key] = value;
+                                });
+
+                                $.ajax("http://localhost:8080/usersToOrgs", {data: data, type: "POST", complete: function() {
+                                        $("#setOrganizations.dialog").dialog("close");
+                                        $("#setOrganizations .loader").css("display", "none");
+
+                                        initializeNetwork(url);
+                                }});
+                            });
                         });
                         
-                        $.each(data, function(index, user){
-                            $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input/></td></tr>");
-                        });
-
-                        $( "#setOrganizations.dialog" ).dialog({
-                            modal: true,
-                            width: "445px"
-                        }).on("submit", function(event, ui){
-                            event.preventDefault();
-
-                            var data = {};
-                            $("#setOrgTable>tbody>tr").each(function() {
-                                var key = $(this).find("td").first().html();
-                                var value = $(this).find("input").val();
-                                data[key] = value;
+                        $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
+                            $.each(data, function(index, issueType){
+                                $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
                             });
-
-                            $.ajax("http://localhost:8080/usersToOrgs", {data: data, type: "POST", async: false, complete: function(){
-                                    $("#setOrganizations.dialog").dialog("close");
-
-                                    initializeNetwork(url);
-                            }});
+                            $( "input.checkboxradio" ).checkboxradio()
+                                    .change(function(){
+                                        resetData();
+                            });
                         });
-                    });
 
-                    $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
-                        $.each(data, function(index, issueType){
-                            $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
-                        });
-                        $( "input.checkboxradio" ).checkboxradio()
-                                .change(function(){
+                        $.get("http://localhost:8080/dates", function(data, status, jqXHR) {
+                            var minDate = new Date(data[0].creationMin);
+                            var maxDate = new Date(data[0].creationMax);
+                            maxDate.setDate(maxDate.getDate() + 1);
+                            var from = $( "#creationFrom" )
+                                .datepicker({
+                                    minDate: minDate,
+                                    maxDate: maxDate,
+                                    defaultDate: minDate,
+                                    changeMonth: true,
+                                    changeYear: true,
+                                    dateFormat: dateFormat
+                                })
+                                .on( "change", function() {
+                                    to.datepicker( "option", "minDate", getDate( this ) );
                                     resetData();
+                                }),
+                                to = $( "#creationTo" ).datepicker({
+                                    minDate: minDate,
+                                    maxDate: maxDate,
+                                    defaultDate: maxDate,
+                                    changeMonth: true,
+                                    changeYear: true,
+                                    dateFormat: dateFormat
+                                })
+                                .on( "change", function() {
+                                    from.datepicker( "option", "maxDate", getDate( this ) );
+                                    resetData();
+                                });
                         });
-                    });
+                    }); //Change to post later on?
+        });
+    }
+    
+    function editUserOrgsModal() {
+        $("#setOrganizations .loader").css("display", "none");
+        $.get("http://localhost:8080/users", function(data, status, jqXHR) {
+            data.sort(function(a,b) {
+                return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
+            });
 
-                    $.get("http://localhost:8080/dates", function(data, status, jqXHR) {
-                        var minDate = new Date(data[0].creationMin);
-                        var maxDate = new Date(data[0].creationMax);
-                        maxDate.setDate(maxDate.getDate() + 1);
-                        var from = $( "#creationFrom" )
-                            .datepicker({
-                                minDate: minDate,
-                                maxDate: maxDate,
-                                defaultDate: minDate,
-                                changeMonth: true,
-                                changeYear: true,
-                                dateFormat: dateFormat
-                            })
-                            .on( "change", function() {
-                                to.datepicker( "option", "minDate", getDate( this ) );
-                                resetData();
-                            }),
-                            to = $( "#creationTo" ).datepicker({
-                                minDate: minDate,
-                                maxDate: maxDate,
-                                defaultDate: maxDate,
-                                changeMonth: true,
-                                changeYear: true,
-                                dateFormat: dateFormat
-                            })
-                            .on( "change", function() {
-                                from.datepicker( "option", "maxDate", getDate( this ) );
-                                resetData();
-                            });
-                    });
+            $.each(data, function(index, user) {
+                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
+            });
+
+            $( "#setOrganizations.dialog" ).dialog({
+                modal: true,
+                width: "445px"
+            });
         });
     }
     

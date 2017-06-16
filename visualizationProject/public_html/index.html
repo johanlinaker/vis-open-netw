@@ -325,11 +325,11 @@
             selection = fileSelection;
         }
         
-        $.getJSON("http://localhost:8080/" + selection + getFilters(), function(data, status, jqXHR){
+        $.getJSON("http://localhost:8080/" + selection + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
             redrawAll(JSON.parse(jqXHR.responseText));
         });
 
-        $.getJSON("http://localhost:8080/" + selection + "_metrics" + getFilters(), function(data, status, jqXHR){
+        $.getJSON("http://localhost:8080/" + selection + "_metrics" + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
             buildMetricsTable(JSON.parse(jqXHR.responseText));
             
             var numCol = 0;
@@ -453,7 +453,7 @@
 
         var tmpNodeIds = new Set();
         parsedJson.forEach(function(e){
-            e.label = e.label.substr(0,4);
+            e.label = e.label.toString().substr(0,4);
             
             tmpNodeIds.add(e.from);
             tmpNodeIds.add(e.to);

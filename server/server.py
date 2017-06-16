@@ -6,34 +6,17 @@ import urllib.parse as urlparse
 
 import pandas as pd
 import networkx as nx
-# import matplotlib.pyplot as plt
-import pymysql
 from perceval.backends.core import jira as percJira
 
 import csv
 import json
 import os
+import tempfile
 
 from datetime import datetime
 import urllib
 
 import py2neo
-
-def setDB(dbname):
-    pymysql.install_as_MySQLdb()
-    db = pymysql.connect(host="vm23.cs.lth.se",
-                         user="kylec",
-                         passwd="oc12UnBjNT",
-                         db=dbname)
-    return db
-
-def populateDB(db, url, project, fromDateTime):
-    db.issues.drop()
-
-    perceval = percJira.Jira(url, project=project)
-    issues = perceval.fetch(from_date=fromDateTime)
-    for issue in issues:
-        db.issues.insert_one(issue['data'])
 
 def populateNeoDB(graph, url, project, fromDateTime):
     # Connect to graph and add constraints.
@@ -85,36 +68,24 @@ def setOrgs(graph, orgData):
     graph.run(query)
 
 
-def readDB(graph, issueTypes = None, creationFromDate = None, creationToDate = None):
-    cur = db.cursor()
-
-    params = []
+def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None):
+    params = {}
     # Nbr of comments per user and issue
     # author | issueId | anchor | nbrOfComments
-    query = """SELECT
-                c.author AS author,
-                c.issueId AS issueId,
-                i.anchor AS anchor,
-                COUNT(*) AS nbrOfComments
-            FROM
-                jira_issue_comments c,
-                jira_issues i
-            WHERE
-                c.issueId = i.id """
+    query = """MATCH (n:Comment)-[r:ON]->(i:Issue) """
 
-    if(issueTypes is not None):
-        query = query + """ AND i.kind IN (""" + ','.join(["%s"] * len(issueTypes)) + """) """
-        params += issueTypes
+    query = query + """ WHERE i.type IN {issueTypes} """
+    params['issueTypes'] = issueTypes
+
     if(creationFromDate is not None):
-        query = query + """ AND i.created >= %s"""
-        params.append(creationFromDate)
+        query = query + """ AND i.createDate >= {creationFromDate} """
+        params['creationFromDate'] = creationFromDate
     if(creationToDate is not None):
-        query = query + """ AND i.created < %s"""
-        params.append(creationToDate)
+        query = query + """ AND i.createDate < {creationToDate} """
+        params['creationToDate'] = creationToDate
 
-    query = query + """ GROUP BY c.author, c.issueId ORDER BY c.author"""
-
-    issueData = pd.read_sql_query(query, db, params=params)
+    query = query + """ RETURN n.author AS author, i.id AS issueId, i.key AS anchor, count(r) AS nbrOfComments"""
+    issueData = pd.DataFrame(graph.data(query, parameters=params))
 
     # Issue id:s per release
     # releaseData = pd.read_csv("releaseData.csv", header=0, sep=",")
@@ -122,31 +93,14 @@ def readDB(graph, issueTypes = None, creationFromDate = None, creationToDate = N
 
     # Gives total number of comments per issue
     # issueId | totNbrOfComments
-    query = """SELECT
-                issueId,
-                COUNT(*)
-                AS
-                totNbrOfComments
-            FROM
-                jira_issue_comments
-            GROUP BY
-                issueId;"""
+    query="""MATCH (n:Comment)-[r:ON]->(i:Issue) RETURN i.id AS issueId, count(r) AS totNbrOfComments"""
 
-    totCommentsPerIssue = pd.read_sql_query(query, db)
+    totCommentsPerIssue = pd.DataFrame(graph.data(query))
 
     # Organizational affiliation per username
-    query = """SELECT
-                p.username AS author,
-                p.organization AS organization,
-                o.id AS organizationId
-            FROM
-                jira_people p,
-                jira_organizations o
-            WHERE
-                p.organization = o.organization;"""
+    query = """MATCH (n:User) RETURN n.key AS author, n.organization AS organization"""
 
-    orgData = pd.read_sql_query(query, db)
-    db.close()
+    orgData = pd.DataFrame(graph.data(query))
 
     # Add column with total number of comments per issue to issueData
     issueData = pd.merge(issueData, totCommentsPerIssue, how="right", on="issueId")
@@ -160,29 +114,25 @@ def readDB(graph, issueTypes = None, creationFromDate = None, creationToDate = N
 
     # Aggregate based on organizational affiliation
     issueData = issueData.groupby(['organization',
-                                       'organizationId',
                                        'issueId',
                                        'totNbrOfComments']).sum().reset_index()
 
-    #issueData.to_csv("01_dbOutput.csv")
+    # issueData.to_csv("01_dbOutput.csv")
 
     return issueData
 
-def calcWeights(issueData):
+def calcWeights(issueData, fileName):
 
     # Add collaborators and merge on common issueId
     collaborators = pd.DataFrame({'issueId': issueData['issueId'],
-                                 'collabOrganization': issueData['organization'],
-                                 'collabOrganizationId': issueData['organizationId']})
+                                 'collabOrganization': issueData['organization']})
 
     issueData = pd.merge(issueData, collaborators, how="outer", on="issueId")
     issueData = issueData.drop('issueId', axis=1)
 
     # Aggregate over general organizational collaboration instead of per issue
     issueData = issueData.groupby(['organization',
-                                   'organizationId',
-                                   'collabOrganization',
-                                   'collabOrganizationId']).sum().reset_index()
+                                   'collabOrganization']).sum().reset_index()
 
     issueData['weight'] = issueData['nbrOfComments'] / issueData['totNbrOfComments']
 
@@ -193,21 +143,11 @@ def calcWeights(issueData):
                                 "collabOrganization": "to",
                                 "weight": "label"}, inplace=True)
 
-    issueOutputFileName = "02_weightOutput"
-    issueOutputFileCSVName = issueOutputFileName + ".csv"
-    edges.to_csv(issueOutputFileCSVName)
-
-    with open(issueOutputFileCSVName) as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-    os.remove(issueOutputFileCSVName)
-
-    with open("Data/" + issueOutputFileName + ".json", 'w') as f:
-        json.dump(rows, f)
+    edges.to_json("Data/" + fileName + ".json", "records")
 
     return issueData
 
-def genNetwork(issueData):
+def genNetwork(issueData, fileName):
 
     netw = nx.from_pandas_dataframe(issueData,
                                     'organization',
@@ -248,17 +188,7 @@ def genNetwork(issueData):
                                                     2: "closeness",
                                                     3: "eigenvector"})
 
-    centralityOutputFileName = "03_centralityOutput"
-    centralityOutputFileCSVName = centralityOutputFileName + ".csv"
-    centralityData.to_csv(centralityOutputFileCSVName)
-
-    with open(centralityOutputFileCSVName) as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-    os.remove(centralityOutputFileCSVName)
-
-    with open("Data/02_weightOutput_metrics.json", 'w') as f:
-        json.dump(rows, f)
+    centralityData.to_json("Data/" + fileName + "_metrics.json", "records")
 
     return centralityData
 
@@ -306,8 +236,8 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     creationFromDate = parsedQuery['creationFromDate'][0] if 'creationFromDate' in keys else None
                     creationToDate = parsedQuery['creationToDate'][0] if 'creationToDate' in keys else None
                     res = readDB(graph, issueTypes, creationFromDate, creationToDate)
-                    res = calcWeights(res)
-                    res = genNetwork(res)
+                    res = calcWeights(res, parsedQuery['url'][0])
+                    res = genNetwork(res, parsedQuery['url'][0])
 
                     try:
                         file = open("Data/" + splitPath[0] + ".json")

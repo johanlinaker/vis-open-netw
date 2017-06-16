@@ -8,10 +8,7 @@ import pandas as pd
 import networkx as nx
 from perceval.backends.core import jira as percJira
 
-import csv
 import json
-import os
-import tempfile
 
 from datetime import datetime
 import urllib
@@ -68,7 +65,7 @@ def setOrgs(graph, orgData):
     graph.run(query)
 
 
-def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None):
+def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True):
     params = {}
     # Nbr of comments per user and issue
     # author | issueId | anchor | nbrOfComments
@@ -83,6 +80,30 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None):
     if(creationToDate is not None):
         query = query + """ AND i.createDate < {creationToDate} """
         params['creationToDate'] = creationToDate
+
+    firstResolutionFilter = True
+    if (resolutionFromDate is not None or resolutionToDate is not None):
+        query = query + """ AND ( """
+
+        if (resolutionFromDate is not None):
+            query = query + """ i.resolutionDate >= {resolutionFromDate} """
+            params['resolutionFromDate'] = resolutionFromDate
+            firstResolutionFilter = False
+
+        if (resolutionToDate is not None):
+            if not firstResolutionFilter:
+                query = query + """ AND """
+            query = query + """ i.resolutionDate < {resolutionToDate} """
+            params['resolutionToDate'] = resolutionToDate
+            firstResolutionFilter = False
+
+        query = query + """ ) """
+    if unresolved == True:
+        if not firstResolutionFilter:
+            query = query + """ OR """
+        else:
+            query = query + """ AND """
+        query = query + """ i.resolutionDate IS NULL """
 
     query = query + """ RETURN n.author AS author, i.id AS issueId, i.key AS anchor, count(r) AS nbrOfComments"""
     issueData = pd.DataFrame(graph.data(query, parameters=params))
@@ -217,11 +238,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
             if(splitPath[0] == "issueTypes"):
                 query = "MATCH (n:Issue) RETURN DISTINCT n.type AS type"
-                issueTypes = graph.run(query) # The extracted data can then be easily passed into an external data handler such as a pandas.DataFrame for subsequent processing
+                issueTypes = graph.run(query)
 
                 self.wfile.write(bytes(json.dumps(issueTypes.data()), 'UTF-8'))
             elif(splitPath[0] == "dates"):
-                query = "MATCH (n:Issue) RETURN MIN(n.createDate) AS creationMin, MAX(n.createDate) AS creationMax"
+                query = "MATCH (n:Issue) RETURN MIN(n.createDate) AS creationMin, MAX(n.createDate) AS creationMax, MIN(n.resolutionDate) AS resolutionMin, MAX(n.resolutionDate) AS resolutionMax"
                 dates = graph.run(query)
 
                 self.wfile.write(bytes(json.dumps(dates.data()), 'UTF-8'))
@@ -235,7 +256,10 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     issueTypes = parsedQuery['issueTypes'][0].split()
                     creationFromDate = parsedQuery['creationFromDate'][0] if 'creationFromDate' in keys else None
                     creationToDate = parsedQuery['creationToDate'][0] if 'creationToDate' in keys else None
-                    res = readDB(graph, issueTypes, creationFromDate, creationToDate)
+                    resolutionFromDate = parsedQuery['resolutionFromDate'][0] if 'resolutionFromDate' in keys else None
+                    resolutionToDate = parsedQuery['resolutionToDate'][0] if 'resolutionToDate' in keys else None
+                    unresolved = parsedQuery['unResolved'][0] if 'unResolved' in keys else None
+                    res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False)
                     res = calcWeights(res, parsedQuery['url'][0])
                     res = genNetwork(res, parsedQuery['url'][0])
 

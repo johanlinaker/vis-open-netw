@@ -17,8 +17,13 @@
       <file leaf-file-name="server.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/server.py">
           <provider selected="true" editor-type-id="text-editor">
+<<<<<<< Updated upstream
             <state relative-caret-position="524">
               <caret line="151" column="40" lean-forward="true" selection-start-line="151" selection-start-column="40" selection-end-line="151" selection-end-column="40" />
+=======
+            <state relative-caret-position="262">
+              <caret line="298" column="127" lean-forward="true" selection-start-line="298" selection-start-column="127" selection-end-line="298" selection-end-column="127" />
+>>>>>>> Stashed changes
               <folding>
                 <element signature="e#0#58#0" expanded="true" />
               </folding>
@@ -748,8 +753,13 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/server.py">
       <provider selected="true" editor-type-id="text-editor">
+<<<<<<< Updated upstream
         <state relative-caret-position="524">
           <caret line="151" column="40" lean-forward="true" selection-start-line="151" selection-start-column="40" selection-end-line="151" selection-end-column="40" />
+=======
+        <state relative-caret-position="262">
+          <caret line="298" column="127" lean-forward="true" selection-start-line="298" selection-start-column="127" selection-end-line="298" selection-end-column="127" />
+>>>>>>> Stashed changes
           <folding>
             <element signature="e#0#58#0" expanded="true" />
           </folding>

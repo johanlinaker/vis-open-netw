@@ -68,8 +68,12 @@
     .ui-dialog-titlebar-close {
         display: none;
     }
-    .noMargin {
-        margin: 0;
+    .timeFilter {
+        display: inline-block;
+    }
+    .filterHeader {
+        margin-top: 10px;
+        margin-bottom: 0;
     }
     .loader {
         border: 5px solid #f3f3f3; /* Light grey */
@@ -101,13 +105,24 @@
     <table id="metricsTable"></table>
 </div>
 <div id="filterContainer">
-    <h2>Time Filter: </h2>
-    <h3 class="noMargin">Issue Creation Dates: </h3>
-    <label for="creationFrom">From: </label>
-    <input type="text" id="creationFrom" name="from">
-    <label for="creationTo">To: </label>
-    <input type="text" id="creationTo" name="to">
-    <h2>Issue Type Filter: </h2>
+    <h2 class="filterHeader">Time Filter: </h2>
+    <fieldset class="timeFilter">
+        <legend>Issue Creation Dates: </legend>
+        <label for="creationFrom">From: </label>
+        <input type="text" id="creationFrom" name="from">
+        <label for="creationTo">To: </label>
+        <input type="text" id="creationTo" name="to">
+    </fieldset>
+    <fieldset class="timeFilter">
+        <legend>Issue Resolved Dates: </legend>
+        <label for="resolutionFrom">From: </label>
+        <input type="text" id="resolutionFrom" name="from">
+        <label for="resolutionTo">To: </label>
+        <input type="text" id="resolutionTo" name="to">
+        <label for="notResolved">Not Resolved</label>
+        <input type="checkbox" name="notResolved" id="notResolved" class="checkboxradio">
+    </fieldset>
+    <h2 class="filterHeader">Issue Type Filter: </h2>
     <fieldset id="issueTypeFieldset">
       <legend>Select Issue Types: </legend>
     </fieldset>
@@ -123,7 +138,7 @@
     <input name="jiraPoject" id="jiraProjectEntry"/>
     </div>
     <div>
-    <label for="jiraFromDateEntry">Enter a From Date (based on updated date):</label>
+    <label for="jiraFromDateEntry">Enter a From Date (based on issue updated date):</label>
     <input type="text" id="jiraFromDateEntry" name="jiraFromDate">
     </div>
     <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
@@ -181,6 +196,8 @@
         
         $( "#jiraFromDateEntry" ).datepicker({changeMonth: true,
                                         changeYear: true});
+                                    
+        $("input.checkboxradio").checkboxradio();
         
         $( "#jiraUrlDialog>form" )
                 .on("submit", function(event, ui) {
@@ -203,11 +220,11 @@
                             $.each(data, function(index, user) {
                                 $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
                             });
-
+                            
                             $( "#setOrganizations.dialog" ).dialog({
                                 modal: true,
-                                width: "445px"
-                            }).on("submit", function(event, ui) {
+                                width: "490px"
+                            }).css("height", ($(window).height() * 0.9) + "px").on("submit", function(event, ui) {
                                 event.preventDefault();
 
                                 $("#setOrganizations .loader").css("display", "");
@@ -239,14 +256,14 @@
                         });
 
                         $.get("http://localhost:8080/dates", function(data, status, jqXHR) {
-                            var minDate = new Date(data[0].creationMin);
-                            var maxDate = new Date(data[0].creationMax);
-                            maxDate.setDate(maxDate.getDate() + 1);
+                            var creationMinDate = new Date(data[0].creationMin);
+                            var creationMaxDate = new Date(data[0].creationMax);
+                            creationMaxDate.setDate(creationMaxDate.getDate() + 1);
                             var from = $( "#creationFrom" )
                                 .datepicker({
-                                    minDate: minDate,
-                                    maxDate: maxDate,
-                                    defaultDate: minDate,
+                                    minDate: creationMinDate,
+                                    maxDate: creationMaxDate,
+                                    defaultDate: creationMinDate,
                                     changeMonth: true,
                                     changeYear: true,
                                     dateFormat: dateFormat
@@ -256,9 +273,38 @@
                                     resetData();
                                 }),
                                 to = $( "#creationTo" ).datepicker({
-                                    minDate: minDate,
-                                    maxDate: maxDate,
-                                    defaultDate: maxDate,
+                                    minDate: creationMinDate,
+                                    maxDate: creationMaxDate,
+                                    defaultDate: creationMaxDate,
+                                    changeMonth: true,
+                                    changeYear: true,
+                                    dateFormat: dateFormat
+                                })
+                                .on( "change", function() {
+                                    from.datepicker( "option", "maxDate", getDate( this ) );
+                                    resetData();
+                                });
+                                
+                            var resolutionMinDate = new Date(data[0].resolutionMin);
+                            var resolutionMaxDate = new Date(data[0].resolutionMax);
+                            resolutionMaxDate.setDate(resolutionMaxDate.getDate() + 1);
+                            var from = $( "#resolutionFrom" )
+                                .datepicker({
+                                    minDate: resolutionMinDate,
+                                    maxDate: resolutionMaxDate,
+                                    defaultDate: resolutionMinDate,
+                                    changeMonth: true,
+                                    changeYear: true,
+                                    dateFormat: dateFormat
+                                })
+                                .on( "change", function() {
+                                    to.datepicker( "option", "minDate", getDate( this ) );
+                                    resetData();
+                                }),
+                                to = $( "#resolutionTo" ).datepicker({
+                                    minDate: resolutionMinDate,
+                                    maxDate: resolutionMaxDate,
+                                    defaultDate: resolutionMaxDate,
                                     changeMonth: true,
                                     changeYear: true,
                                     dateFormat: dateFormat
@@ -268,7 +314,7 @@
                                     resetData();
                                 });
                         });
-                    }); //Change to post later on?
+                    });
         });
     }
     
@@ -301,7 +347,9 @@
     }
     
     function getDateFilters() {
-        return "&creationFromDate=" + encodeURIComponent($("#creationFrom").val()) + "&creationToDate=" + encodeURIComponent($("#creationTo").val());
+        return "&creationFromDate=" + encodeURIComponent($("#creationFrom").val()) + "&creationToDate=" + encodeURIComponent($("#creationTo").val()) + 
+               "&resolutionFromDate=" + encodeURIComponent($("#resolutionFrom").val()) + "&resolutionToDate=" + encodeURIComponent($("#resolutionTo").val()) +
+               "&unResolved=" + $("#notResolved").is(":checked");
     }
     
     function getFilters() {

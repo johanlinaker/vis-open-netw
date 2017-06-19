@@ -194,8 +194,8 @@
     initialize();
     
     function initialize() {
-        desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"];
-        tableIdColumn = desiredMetricColumns[0];
+        desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"]; //Only display these columns in the table
+        tableIdColumn = desiredMetricColumns[0]; //Make "company" the first column
         
         $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
         
@@ -218,9 +218,11 @@
                     var project = $( "#jiraProjectEntry" ).val();
                     var fromDate = $( "#jiraFromDateEntry" ).val();
                     
+                    //Send Sir Perceval on a quest
                     $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function() {
                         $(event.currentTarget).parents(".dialog").dialog("close");
                         
+                        //get a list of users and their respective organizations
                         $.get("http://localhost:8080/users", function(data, status, jqXHR) {
                             data.sort(function(a,b) {
                                 return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
@@ -246,6 +248,7 @@
                                     data[key] = value;
                                 });
 
+                                //Update the manually edited user organizations
                                 $.ajax("http://localhost:8080/usersToOrgs", {data: data, type: "POST", complete: function() {
                                         $("#setOrganizations.dialog").dialog("close");
                                         $("#setOrganizations .loader").css("display", "none");
@@ -255,6 +258,7 @@
                             });
                         });
                         
+                        //Get the available issue types
                         $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
                             $.each(data, function(index, issueType){
                                 $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
@@ -265,6 +269,7 @@
                             });
                         });
 
+                        //Get the relevant date ranges and set up the date filters
                         $.get("http://localhost:8080/dates", function(data, status, jqXHR) {
                             var creationMinDate = new Date(data[0].creationMin);
                             var creationMaxDate = new Date(data[0].creationMax);
@@ -328,6 +333,7 @@
         });
     }
     
+    //Get the users' organizations and redisplay the modal used to manually edit the users' organizations
     function editUserOrgsModal() {
         $("#setOrganizations .loader").css("display", "none");
         $("#setOrganizations tbody tr").remove();
@@ -348,6 +354,7 @@
         });
     }
     
+    //Get the state of the issue type filters
     function getTypeFilters() {
         var issueTypesString = "";
         $.each($("#filterContainer #issueTypeFieldset input:checked"), function(index, issueTypeCheckbox){
@@ -358,17 +365,20 @@
         return issueTypesString !== "" ? "&issueTypes=" + issueTypesString : issueTypesString;
     }
     
+    //Get the state of the date filters
     function getDateFilters() {
         return "&creationFromDate=" + encodeURIComponent($("#creationFrom").val()) + "&creationToDate=" + encodeURIComponent($("#creationTo").val()) + 
                "&resolutionFromDate=" + encodeURIComponent($("#resolutionFrom").val()) + "&resolutionToDate=" + encodeURIComponent($("#resolutionTo").val()) +
                "&unResolved=" + $("#notResolved").is(":checked");
     }
     
+    //Get the state of all filters
     function getFilters() {
         var filters = (getTypeFilters() + getDateFilters()).substring(1);//slice off excess '&'
         return "?" + filters;
     }
     
+    //Reset the data being displayed on the graph and table
     var fileSelection;
     function resetData(selection) {
         edges.clear();
@@ -447,6 +457,7 @@
         });
     }
     
+    //Display the edge data in place of the table
     function displayEdgeData(selectionData) {
         if(selectionData.nodes.length === 0 && selectionData.edges.length === 1) {
             $("#metricsTable").css("display","none");
@@ -494,6 +505,7 @@
         }
     }
     
+    //Re-add removed nodes and edges to the graph
     var removedEdges = [];
     var removedNodes = [];
     function redrawAll(parsedJson) {
@@ -532,6 +544,7 @@
         edges.add(parsedJson);
     }
  
+    //Filter the graph
     function removeUnconnectedMembers(mainNode){
         var safeNodes = new Set([]);
         var edgeArray = edges.get();
@@ -554,6 +567,7 @@
         }
     }
     
+    //Add back connected removed nodes and edges for the given node
     function addBackRemovedEdgesAndNodes(forNode){
         if(forNode === undefined) {
             edges.add(removedEdges);
@@ -574,6 +588,7 @@
         removedNodes = [];
     }
     
+    //Click handling on graph to make sure double clicks are not interpreted as two single clicks
     function handleClick(selectionData){
         var t0 = new Date();
         if (t0 - doubleClickTime > threshold) {
@@ -585,6 +600,7 @@
         }
     }
     
+    //click handling on graph
     function doClick(selectionData) {
         if(!(selectionData.edges.length === 1 && selectionData.nodes.length === 0 && options.layout.hierarchical.enabled)){
             setupDefaultOptions();
@@ -603,6 +619,7 @@
         }
     }
     
+    //Filter the data in the table, dependant on selected node
     function filterTable(selectedNode){
         var rows = $("#metricsTable > tbody > tr:not(:first-child)");
         rows.css("display", "");
@@ -639,11 +656,13 @@
         return date;
     }
     
+    //Go back to showing the table instead of the extra edge info
     function resetExtraInfo(){
         $("#extraInfoContainer h1").css("display","none");
         $("#metricsTable").css("display","");
     }
     
+    //Change to a hierarchal graph structure with the selected node being the top node
     function getHierarchy(selectionData){
         var mainNode = nodes.get(selectionData.nodes[0]);
         for(e in network.body.edges){
@@ -665,6 +684,7 @@
         network.setOptions(hierarchOptions);
     }
     
+    //Set the vis.js default options
     function setupDefaultOptions(){
         options = {
             nodes: {borderWidth: 0, font: { color: '#FFF', size: 27 }},

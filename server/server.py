@@ -51,6 +51,7 @@ def populateNeoDB(graph, url, project, fromDateTime):
     # Send Cypher query.
     graph.run(query, parameters={"json": json.loads(buf)})
 
+# Set what organization the user is in according to data in orgData
 def setOrgs(graph, orgData):
     for user in orgData:
         query = "MATCH (n:User) WHERE n.key = '" + user.decode("utf-8") + "' SET n.organization = '" + orgData[user][0].decode("utf-8") + "'"
@@ -107,10 +108,6 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
 
     query = query + """ RETURN n.author AS author, i.id AS issueId, i.key AS anchor, count(r) AS nbrOfComments"""
     issueData = pd.DataFrame(graph.data(query, parameters=params))
-
-    # Issue id:s per release
-    # releaseData = pd.read_csv("releaseData.csv", header=0, sep=",")
-    # releaseData = releaseData.where(releaseData['release'] != 'R2.8.0')
 
     # Gives total number of comments per issue
     # issueId | totNbrOfComments
@@ -222,6 +219,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         parsedQuery = urlparse.parse_qs(parsedUrl.query)
         keys = parsedQuery.keys()
 
+        # Send Sir Perceval on a quest to populate the Neo4j db
         if(len(splitPath) == 2 and splitPath[0] == 'quest'):
             populateNeoDB(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y')) # may need to decode splitPath[1], fromDate
             self.send_response(200)

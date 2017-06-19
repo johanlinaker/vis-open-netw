@@ -18,7 +18,7 @@ Currently this application only works for JIRA.
 # Set-up
 
 1. Clone this repo
-2. Install Requirements (above)
+2. Install Requirements (above) - you may also need to uninstall Perceval if you have a copy already
 3. Install Neo4j - https://neo4j.com/download/community-edition/
     - Go to http://localhost:7474/browser/ and change the neo4j user password to "lund101"
 4. Run server.py

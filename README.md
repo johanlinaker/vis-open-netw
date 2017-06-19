@@ -34,3 +34,12 @@ There are some JIRA-specific elements, specifically the query used to populate t
 This repo includes a copy of Perceval (https://github.com/grimoirelab/perceval) that contains a change to the JIRA backend. This change allows Perceval to grab the comments for each issue.
 
 In the future it would be desirable to make a switch for the Perceval JIRA backend for grabbing JIRA issue comments and to create a PR in the Perceval git repo so that the offical, supported, version of perceval can be used in this application instead of the copy included.
+
+# Overview
+
+- Neo4j is used as a database to store the data scraped by the included version of Perceval.
+- The python server.py script services requests for the data in the database, so the main purpose of the script is to translate HTTP requests to Neo4j queries and to take the Neo4j responses and to translate the data into formats the front-end can consume
+- The front-end is, in majority, in javascript, utilizing jQuery for organizing and manipulating the HTML, and vis.js for creating the front-end graph. Requests are sent to the python server using ajax queries.
+
+- To add support for other Perceval back-ends changes should only need to be made to the python script (in fact, only the import script should need to change, along with Perceval call changes)
+    - Note: The Perceval back-end itself may need to be changed, but this will need to be determined on a case-by-case basis

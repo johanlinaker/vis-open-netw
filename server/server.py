@@ -33,7 +33,7 @@ def populateNeoDB(graph, url, project, fromDateTime):
     buf += ']\n}'
 
 
-    # Build query.
+    # Build query - This is JIRA-backend-specific
     query = """
             WITH {json} as data
             UNWIND data.items as i

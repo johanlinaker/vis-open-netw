@@ -32,7 +32,16 @@
         padding-top: 5px;
     }
     #setOrgTable {
+        table-layout: fixed;
         height: auto;
+        width: 100%;
+        padding: 0;
+    }
+    #setOrgTable input {
+        width: 100%;
+    }
+    #setOrgTable tbody td {
+        word-wrap: break-word;
     }
     #jiraUrlDialog div>input {
         display: block;
@@ -223,8 +232,9 @@
                             
                             $( "#setOrganizations.dialog" ).dialog({
                                 modal: true,
-                                width: "490px"
-                            }).css("height", ($(window).height() * 0.9) + "px").on("submit", function(event, ui) {
+                                width: "490px",
+                                position: { at: "top" }
+                            }).css("max-height", ($(window).height() * 0.9) + "px").on("submit", function(event, ui) {
                                 event.preventDefault();
 
                                 $("#setOrganizations .loader").css("display", "");
@@ -320,6 +330,7 @@
     
     function editUserOrgsModal() {
         $("#setOrganizations .loader").css("display", "none");
+        $("#setOrganizations tbody tr").remove();
         $.get("http://localhost:8080/users", function(data, status, jqXHR) {
             data.sort(function(a,b) {
                 return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
@@ -331,7 +342,8 @@
 
             $( "#setOrganizations.dialog" ).dialog({
                 modal: true,
-                width: "445px"
+                width: "490px",
+                position: { at: "top" }
             });
         });
     }

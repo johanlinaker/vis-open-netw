@@ -207,6 +207,7 @@
                                         changeYear: true});
                                     
         $("input.checkboxradio").checkboxradio();
+        $("#notResolved").checkboxradio("widget").css("height", "20px").css("padding-top", "0").css("padding-bottom", "0");
         
         $( "#jiraUrlDialog>form" )
                 .on("submit", function(event, ui) {
@@ -395,31 +396,39 @@
             selection = fileSelection;
         }
         
-        $.getJSON("http://localhost:8080/" + selection + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
-            redrawAll(JSON.parse(jqXHR.responseText));
-        });
+        $("#filterContainer input").prop("disabled", true);
+        $("#filterContainer .checkboxradio").checkboxradio("disable");
+        var enableInputs = function() {
+            $("#filterContainer input").prop("disabled", false);
+            $("#filterContainer .checkboxradio").checkboxradio("enable");
+        };
+        
+        $.when(
+            $.getJSON("http://localhost:8080/" + selection + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
+                redrawAll(JSON.parse(jqXHR.responseText));
+            }),
+            $.getJSON("http://localhost:8080/" + selection + "_metrics" + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
+                buildMetricsTable(JSON.parse(jqXHR.responseText));
 
-        $.getJSON("http://localhost:8080/" + selection + "_metrics" + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
-            buildMetricsTable(JSON.parse(jqXHR.responseText));
-            
-            var numCol = 0;
-            $.each($("#metricsTable tbody tr th"), function(index,column){
-                if ($(column).html() === tableIdColumn) {
-                    return false;
-                }else {
-                    numCol += 1;
-                }
-            });
-
-            if(numCol > 0) {
-                $("#metricsTable tbody tr").each(function() {
-                    var tr = $(this);
-                    var td1 = tr.find('th:eq(0),td:eq(0)'); // indices are zero-based here
-                    var td2 = tr.find('th:eq(' + numCol + '),td:eq(' + numCol + ')');
-                    td2.detach().insertBefore(td1);
+                var numCol = 0;
+                $.each($("#metricsTable tbody tr th"), function(index,column){
+                    if ($(column).html() === tableIdColumn) {
+                        return false;
+                    }else {
+                        numCol += 1;
+                    }
                 });
-            }
-        });
+
+                if(numCol > 0) {
+                    $("#metricsTable tbody tr").each(function() {
+                        var tr = $(this);
+                        var td1 = tr.find('th:eq(0),td:eq(0)'); // indices are zero-based here
+                        var td2 = tr.find('th:eq(' + numCol + '),td:eq(' + numCol + ')');
+                        td2.detach().insertBefore(td1);
+                    });
+                }
+            })
+        ).then(enableInputs, enableInputs);
     }
 
     function initializeNetwork(selection) {

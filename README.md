@@ -18,11 +18,12 @@ Currently this application only works for JIRA.
 # Set-up
 
 1. Clone this repo
-2. Install Neo4j - https://neo4j.com/download/community-edition/
+2. Install Requirements (above)
+3. Install Neo4j - https://neo4j.com/download/community-edition/
     - Go to http://localhost:7474/browser/ and change the neo4j user password to "lund101"
-3. Run server.py
-4. Run index.html on port 8383
-5. Go to http://localhost:8383/visualizationProject/index.html
+4. Run server.py
+5. Run index.html on port 8383
+6. Go to http://localhost:8383/visualizationProject/index.html
 
 # JIRA Specifics
 

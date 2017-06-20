@@ -1,7 +1,7 @@
 # vis-open-netw
-Tool-support for Analysis and Visualization of Companies Involved in Open Source Software Communities
+StakeViz is a tool for analysis and visualization of stakegholders involved in Open Source Software (OSS) communities. It scrapes communication and contribution data from community repositories and creates networks based on how stakeholders (individuals and/or organizations) has interacted (e.g., commented on the same issue, or contributed a commit to the same file). The tool then allows you to visually analyze who collaborates with whom, and leverage centrlality metrics to point out those with the higest influence, and that contributed the most. 
 
-Currently this application only works for JIRA.
+Currently this application is limited to only scrape data from JIRA issue trackers enabled by custimization to the [Perceval](https://github.com/grimoirelab/perceval) project. Support for further types of repositories will be added in the future.
 
 # Requirements
     Python >= 3.4
@@ -9,19 +9,21 @@ Currently this application only works for JIRA.
     python3-requests >= 2.7
     python3-bs4 (beautifulsoup4) >= 4.3
     python3-feedparser >= 5.1.3
-    grimoirelab-toolkit >= 0.1.0
-    urllib3 >= 1.9
-    pandas >= 0.20.1
-    networkx >= 1.11
+    python3-setuptools >= 20.7.0
+    [grimoirelab-toolkit](https://github.com/grimoirelab/grimoirelab-toolkit) >= 0.1.0
+    python3-urllib3 >= 1.9
+    python3-pandas >= 0.20.1
+    python3-networkx >= 1.11
     py2neo >= 3.1.2
 
 # Set-up
 
 1. Clone this repo
-2. Install Requirements (above) - you may also need to uninstall Perceval if you have a copy already
-3. Install Neo4j - https://neo4j.com/download/community-edition/
-    - Go to http://localhost:7474/browser/ and change the neo4j user password to "lund101"
-4. Run server.py
+2. Install Requirements (above), e.g., using apt-get or pip
+    - Note that you may also need to uninstall Perceval if you have a copy already
+3. Download and boot up [neo4j](https://neo4j.com/download/community-edition/)
+    - Go to http://localhost:7474/browser/ and change the default user password from "neo4j" to "lund101"
+4. Run ./server/server.py
 5. Run index.html on port 8383
 6. Go to http://localhost:8383/visualizationProject/index.html
 
@@ -31,7 +33,7 @@ There are some JIRA-specific elements, specifically the query used to populate t
 
 # Perceval
 
-This repo includes a copy of Perceval (https://github.com/grimoirelab/perceval) that contains a change to the JIRA backend. This change allows Perceval to grab the comments for each issue.
+This repo includes a copy of [Perceval](https://github.com/grimoirelab/perceval) that contains a change to the JIRA backend. This change allows Perceval to grab the comments for each issue.
 
 In the future it would be desirable to make a switch for the Perceval JIRA backend for grabbing JIRA issue comments and to create a PR in the Perceval git repo so that the offical, supported, version of perceval can be used in this application instead of the copy included.
 

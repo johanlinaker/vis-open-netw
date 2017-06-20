@@ -1,5 +1,5 @@
 # vis-open-netw
-StakeViz is a tool for analysis and visualization of stakegholders involved in Open Source Software (OSS) communities. It scrapes communication and contribution data from community repositories and creates networks based on how stakeholders (individuals and/or organizations) has interacted (e.g., commented on the same issue, or contributed a commit to the same file). The tool then allows you to visually analyze who collaborates with whom, and leverage centrlality metrics to point out those with the higest influence, and that contributed the most. 
+StakeViz is a tool for analysis and visualization of stakeholders involved in Open Source Software (OSS) communities. It scrapes communication and contribution data from community repositories and creates networks based on how stakeholders (individuals and/or organizations) has interacted (e.g., commented on the same issue, or contributed a commit to the same file). The tool then allows you to visually analyze who collaborates with whom, and leverage centrlality metrics to point out those with the higest influence, and that contributed the most. 
 
 Currently this application is limited to only scrape data from JIRA issue trackers enabled by custimization to the [Perceval](https://github.com/grimoirelab/perceval) project. Support for further types of repositories will be added in the future.
 
@@ -19,13 +19,14 @@ Currently this application is limited to only scrape data from JIRA issue tracke
 # Set-up
 
 1. Clone this repo
-2. Install Requirements (above), e.g., using apt-get or pip
+2. Install Requirements (above), e.g., using apt-get or pip3
     - Note that you may also need to uninstall Perceval if you have a copy already
-3. Download and boot up [neo4j](https://neo4j.com/download/community-edition/)
+3. Go to ./visualizationProject/perceval and run "python3 setup.py install"
+4. Download and boot up [neo4j](https://neo4j.com/download/community-edition/)
     - Go to http://localhost:7474/browser/ and change the default user password from "neo4j" to "lund101"
-4. Run ./server/server.py
-5. Run index.html on port 8383
-6. Go to http://localhost:8383/visualizationProject/index.html
+5. Run "python3 ./server/server.py 8080 localhost"
+6. Run ./visualizationProject/public_html/index.html on port 8383 (for example, by running "python3 -m http.server 8383" while in the top-level directory for this project)
+7. Go to http://localhost:8383/visualizationProject/index.html
 
 # JIRA Specifics
 

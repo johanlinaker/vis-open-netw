@@ -10,7 +10,7 @@ Currently this application is limited to only scrape data from JIRA issue tracke
     python3-bs4 (beautifulsoup4) >= 4.3
     python3-feedparser >= 5.1.3
     python3-setuptools >= 20.7.0
-    [grimoirelab-toolkit](https://github.com/grimoirelab/grimoirelab-toolkit) >= 0.1.0
+    grimoirelab-toolkit >= 0.1.0
     python3-urllib3 >= 1.9
     python3-pandas >= 0.20.1
     python3-networkx >= 1.11
@@ -20,13 +20,14 @@ Currently this application is limited to only scrape data from JIRA issue tracke
 
 1. Clone this repo
 2. Install Requirements (above), e.g., using apt-get or pip3
+    - The [grimoirelab-toolkit](https://github.com/grimoirelab/grimoirelab-toolkit) needs to be cloned and installed manually.
     - Note that you may also need to uninstall Perceval if you have a copy already
 3. Go to ./visualizationProject/perceval and run "python3 setup.py install"
 4. Download and boot up [neo4j](https://neo4j.com/download/community-edition/)
     - Go to http://localhost:7474/browser/ and change the default user password from "neo4j" to "lund101"
 5. Run "python3 ./server/server.py 8080 localhost"
 6. Run ./visualizationProject/public_html/index.html on port 8383 (for example, by running "python3 -m http.server 8383" while in the top-level directory for this project)
-7. Go to http://localhost:8383/visualizationProject/index.html
+7. Go to http://localhost:8383/visualizationProject/public_html/index.html
 
 # JIRA Specifics
 

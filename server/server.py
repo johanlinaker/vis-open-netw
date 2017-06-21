@@ -9,13 +9,26 @@ import networkx as nx
 from perceval.backends.core import jira as percJira
 
 import json
+import os
 
 from datetime import datetime
 import urllib
 
 import py2neo
 
+def cleanDataDir():
+    folder = "Data/Stored"
+    for file in os.listdir(folder):
+        filePath = os.path.join(folder, file)
+        try:
+            if os.path.isfile(filePath):
+                os.unlink(filePath)
+        except Exception as e:
+            print(e)
+
 def populateNeoDB(graph, url, project, fromDateTime):
+    cleanDataDir()
+
     # Connect to graph and add constraints.
     graph.delete_all()
     graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
@@ -47,6 +60,10 @@ def populateNeoDB(graph, url, project, fromDateTime):
                 MERGE (author)-[:CREATED]->(comment)
             )
                 """
+
+    # Save buffered data for later usage
+    with open("Data/Stored/created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime("%d-%m-%Y") + "&project=" + project + "&url=" + urllib.parse.quote(url, safe=""), "w+") as storageFile:
+        storageFile.write(buf)
 
     # Send Cypher query.
     graph.run(query, parameters={"json": json.loads(buf)})
@@ -221,7 +238,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
         # Send Sir Perceval on a quest to populate the Neo4j db
         if(len(splitPath) == 2 and splitPath[0] == 'quest'):
-            populateNeoDB(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y')) # may need to decode splitPath[1], fromDate
+            populateNeoDB(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             self.send_response(200)
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -234,7 +251,9 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
-            if(splitPath[0] == "issueTypes"):
+            if(splitPath[0] == "storedData"):
+                self.wfile.write(bytes("{\"files\":[\"" + urllib.parse.unquote("\",\"".join(os.listdir("Data/Stored"))) + "\"]}", 'UTF-8'))
+            elif(splitPath[0] == "issueTypes"):
                 query = "MATCH (n:Issue) RETURN DISTINCT n.type AS type"
                 issueTypes = graph.run(query)
 

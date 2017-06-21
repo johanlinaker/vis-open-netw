@@ -70,6 +70,17 @@
         background-color: #ddd;
         cursor: pointer;
     }
+    #sourceTypeSelection input {
+        display: block;
+        position: relative;
+        margin: 5 auto;
+    }
+    #prevDataSetSelect table tbody td {
+        text-align: center;
+    }
+    #prevDataSetSelect table tbody input {
+        width: 79px;
+    }
     .issueTypeFilter {
         margin: 10px;
         margin-left: 0;
@@ -136,7 +147,13 @@
       <legend>Select Issue Types: </legend>
     </fieldset>
 </div>
-<div id="jiraUrlDialog" class="dialog" title="JIRA URL">
+
+<div id="sourceTypeSelection" class="dialog" title="Source Type Selection">
+    <input id="newDataScrape" class="ui-button ui-widget ui-corner-all" value="New Data Scrape">
+    <input id="loadPrevData" class="ui-button ui-widget ui-corner-all" value="Previously Scraped Data">
+</div>
+
+<div id="jiraUrlDialog" class="dialog" style="display:none;" title="JIRA URL">
   <form>
     <div>
     <label for="jiraUrlEntry">Enter a JIRA URL:</label>
@@ -152,6 +169,29 @@
     </div>
     <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
   </form>
+</div>
+
+<div id="prevDataSetSelect" class="dialog" style="display:none;" title="Select a DataSet to Load">
+    <table>
+        <thead>
+            <tr>
+                <th>
+                    Data Creation Date (UTC)
+                </th>
+                <th>
+                    API URL
+                </th>
+                <th>
+                    Project
+                </th>
+                <th>
+                    Scrape Date
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
 </div>
 
 <div id='setOrganizations' class="dialog" style="display:none;" title="Set Organizations">
@@ -199,8 +239,32 @@
         
         $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
         
-        $( "#jiraUrlDialog.dialog" ).dialog({
+        $( "#sourceTypeSelection.dialog" ).dialog({
             modal: true
+        });
+        
+        $( "#sourceTypeSelection #newDataScrape").click(function(event, ui) {
+            $( "#sourceTypeSelection" ).dialog("close");
+            
+            $( "#jiraUrlDialog.dialog" ).dialog({
+                modal: true
+            });
+        });
+        
+        $( "#sourceTypeSelection #loadPrevData").click(function(event, ui) {
+            $( "#sourceTypeSelection" ).dialog("close");
+            
+            $.get("http://localhost:8080/storedData", function(data, status, jqXHR) {
+                for (file in data.files) {
+                    var splitInfo = parseDecodedQuery(data.files[file]);
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                }
+                        
+                $( "#prevDataSetSelect.dialog" ).dialog({
+                    modal: true,
+                    width: "700px"
+                });
+            });
         });
         
         $( "#jiraFromDateEntry" ).datepicker({changeMonth: true,
@@ -712,6 +776,16 @@
               },
             layout: {hierarchical: {enabled: false}}
         };
+    }
+    
+    function parseDecodedQuery(qstr) {
+        var query = {};
+        var a = (qstr[0] === '?' ? qstr.substr(1) : qstr).split('&');
+        for (var i = 0; i < a.length; i++) {
+            var b = a[i].split('=');
+            query[b[0]] = b[1];
+        }
+        return query;
     }
 </script>
 </body>

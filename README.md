@@ -3,6 +3,8 @@ Tool-support for Analysis and Visualization of Companies Involved in Open Source
 
 Currently this application only works for JIRA.
 
+Note that there should only be one connection to the server running via ./server/server.py at a time for proper operation.
+
 # Requirements
     Python >= 3.4
     python3-dateutil >= 2.6

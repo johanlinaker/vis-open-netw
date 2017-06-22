@@ -17,7 +17,7 @@ import urllib
 import py2neo
 
 def cleanDataDir():
-    folder = "Data/Stored"
+    folder = "Data"
     for file in os.listdir(folder):
         filePath = os.path.join(folder, file)
         try:
@@ -26,13 +26,7 @@ def cleanDataDir():
         except Exception as e:
             print(e)
 
-def populateNeoDB(graph, url, project, fromDateTime):
-    cleanDataDir()
-
-    # Connect to graph and add constraints.
-    graph.delete_all()
-    graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
-
+def scrapeDataToNeo(graph, url, project, fromDateTime):
     perceval = percJira.Jira(url, project=project)
     issues = perceval.fetch(from_date=fromDateTime)
 
@@ -45,6 +39,18 @@ def populateNeoDB(graph, url, project, fromDateTime):
         buf += json.dumps(issue['data'])
     buf += ']\n}'
 
+    # Save buffered data for later usage
+    with open("Data/Stored/created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime(
+            "%d-%m-%Y") + "&project=" + project + "&url=" + urllib.parse.quote(url, safe=""), "w+") as storageFile:
+        storageFile.write(buf)
+
+    populateNeoDb(graph, buf)
+
+def populateNeoDb(graph, jsonData):
+    cleanDataDir()
+
+    graph.delete_all()
+    graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
 
     # Build query - This is JIRA-backend-specific
     query = """
@@ -52,7 +58,7 @@ def populateNeoDB(graph, url, project, fromDateTime):
             UNWIND data.items as i
             MERGE (issue:Issue {id:i.id}) ON CREATE
               SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created
-            
+
             FOREACH (comm IN i.fields.comment.comments |
                 MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
                 MERGE (comment)-[:ON]->(issue)
@@ -61,12 +67,8 @@ def populateNeoDB(graph, url, project, fromDateTime):
             )
                 """
 
-    # Save buffered data for later usage
-    with open("Data/Stored/created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime("%d-%m-%Y") + "&project=" + project + "&url=" + urllib.parse.quote(url, safe=""), "w+") as storageFile:
-        storageFile.write(buf)
-
     # Send Cypher query.
-    graph.run(query, parameters={"json": json.loads(buf)})
+    graph.run(query, parameters={"json": json.loads(jsonData)})
 
 # Set what organization the user is in according to data in orgData
 def setOrgs(graph, orgData):
@@ -74,13 +76,6 @@ def setOrgs(graph, orgData):
         query = "MATCH (n:User) WHERE n.key = '" + user.decode("utf-8") + "' SET n.organization = '" + orgData[user][0].decode("utf-8") + "'"
 
         graph.run(query)
-
-    query = """
-    MATCH (n:User) WHERE n.organization IS NULL
-    SET n.organization = 'undefined'
-    """
-
-    graph.run(query)
 
 
 def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True):
@@ -156,7 +151,7 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
 
     return issueData
 
-def calcWeights(issueData, fileName):
+def calcWeights(issueData):
 
     # Add collaborators and merge on common issueId
     collaborators = pd.DataFrame({'issueId': issueData['issueId'],
@@ -178,11 +173,11 @@ def calcWeights(issueData, fileName):
                                 "collabOrganization": "to",
                                 "weight": "label"}, inplace=True)
 
-    edges.to_json("Data/" + fileName + ".json", "records")
+    edges.to_json("Data/calculated.json", "records")
 
     return issueData
 
-def genNetwork(issueData, fileName):
+def genNetwork(issueData):
 
     netw = nx.from_pandas_dataframe(issueData,
                                     'organization',
@@ -223,7 +218,7 @@ def genNetwork(issueData, fileName):
                                                     2: "closeness",
                                                     3: "eigenvector"})
 
-    centralityData.to_json("Data/" + fileName + "_metrics.json", "records")
+    centralityData.to_json("Data/calculated_metrics.json", "records")
 
     return centralityData
 
@@ -238,7 +233,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
         # Send Sir Perceval on a quest to populate the Neo4j db
         if(len(splitPath) == 2 and splitPath[0] == 'quest'):
-            populateNeoDB(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
+            scrapeDataToNeo(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             self.send_response(200)
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -277,11 +272,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     resolutionToDate = parsedQuery['resolutionToDate'][0] if 'resolutionToDate' in keys else None
                     unresolved = parsedQuery['unResolved'][0] if 'unResolved' in keys else None
                     res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False)
-                    res = calcWeights(res, parsedQuery['url'][0])
-                    res = genNetwork(res, parsedQuery['url'][0])
+                    res = calcWeights(res)
+                    res = genNetwork(res)
 
                     try:
-                        file = open("Data/" + splitPath[0] + ".json")
+                        file = open("Data/calculated" + splitPath[0] + ".json")
                     except IOError:
                         self.send_error(404, self.path + " does not exist.")
                         return
@@ -300,7 +295,12 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             orgData = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
 
             setOrgs(graph, orgData)
-
+        elif (splitPath[0] == "load"):
+            fileNameParams = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
+            fileNameParams[b'url'][0] = urllib.parse.quote(fileNameParams[b'url'][0], safe="")
+            fileName = "created=" + str(fileNameParams[b'created'][0], "UTF-8") + "&from=" + str(fileNameParams[b'from'][0], "UTF-8") + "&project=" + str(fileNameParams[b'project'][0], "UTF-8") + "&url=" + fileNameParams[b'url'][0]
+            with open("Data/Stored/" + fileName) as file:
+                populateNeoDb(graph, file.read())
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True

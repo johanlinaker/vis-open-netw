@@ -246,6 +246,24 @@
         $( "#sourceTypeSelection #newDataScrape").click(function(event, ui) {
             $( "#sourceTypeSelection" ).dialog("close");
             
+            $( "#jiraUrlDialog>form" )
+                .on("submit", function(event, ui) {
+                    event.preventDefault();
+            
+                    $("#jiraUrlDialog .loader").css("display", "");
+            
+                    var url = $( "#jiraUrlEntry" ).val();
+                    var project = $( "#jiraProjectEntry" ).val();
+                    var fromDate = $( "#jiraFromDateEntry" ).val();
+                    
+                    //Send Sir Perceval on a quest
+                    $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function() {
+                        setupApp();
+                        
+                        $(event.currentTarget).parents(".dialog").dialog("close");
+                    });
+            });
+            
             $( "#jiraUrlDialog.dialog" ).dialog({
                 modal: true
             });
@@ -272,131 +290,123 @@
                                     
         $("input.checkboxradio").checkboxradio();
         $("#notResolved").checkboxradio("widget").css("height", "20px").css("padding-top", "0").css("padding-bottom", "0");
-        
-        $( "#jiraUrlDialog>form" )
-                .on("submit", function(event, ui) {
-                    event.preventDefault();
-            
-                    $("#jiraUrlDialog .loader").css("display", "");
-            
-                    var url = $( "#jiraUrlEntry" ).val();
-                    var project = $( "#jiraProjectEntry" ).val();
-                    var fromDate = $( "#jiraFromDateEntry" ).val();
-                    
-                    //Send Sir Perceval on a quest
-                    $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function() {
-                        $(event.currentTarget).parents(".dialog").dialog("close");
-                        
-                        //get a list of users and their respective organizations
-                        $.get("http://localhost:8080/users", function(data, status, jqXHR) {
-                            data.sort(function(a,b) {
-                                return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
-                            });
-
-                            $.each(data, function(index, user) {
-                                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
-                            });
-                            
-                            $( "#setOrganizations.dialog" ).dialog({
-                                modal: true,
-                                width: "490px",
-                                position: { at: "top" }
-                            }).css("max-height", ($(window).height() * 0.9) + "px").on("submit", function(event, ui) {
-                                event.preventDefault();
-
-                                $("#setOrganizations .loader").css("display", "");
-
-                                var data = {};
-                                $("#setOrgTable>tbody>tr").each(function() {
-                                    var key = $(this).find("td").first().html();
-                                    var value = $(this).find("input").val();
-                                    data[key] = value;
-                                });
-
-                                //Update the manually edited user organizations
-                                $.ajax("http://localhost:8080/usersToOrgs", {data: data, type: "POST", complete: function() {
-                                        $("#setOrganizations.dialog").dialog("close");
-                                        $("#setOrganizations .loader").css("display", "none");
-
-                                        initializeNetwork(url);
-                                }});
-                            });
-                        });
-                        
-                        //Get the available issue types
-                        $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
-                            $.each(data, function(index, issueType){
-                                $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
-                            });
-                            $( "input.checkboxradio" ).checkboxradio()
-                                    .change(function(){
-                                        resetData();
-                            });
-                        });
-
-                        //Get the relevant date ranges and set up the date filters
-                        $.get("http://localhost:8080/dates", function(data, status, jqXHR) {
-                            var creationMinDate = new Date(data[0].creationMin);
-                            var creationMaxDate = new Date(data[0].creationMax);
-                            creationMaxDate.setDate(creationMaxDate.getDate() + 1);
-                            var from = $( "#creationFrom" )
-                                .datepicker({
-                                    minDate: creationMinDate,
-                                    maxDate: creationMaxDate,
-                                    defaultDate: creationMinDate,
-                                    changeMonth: true,
-                                    changeYear: true,
-                                    dateFormat: dateFormat
-                                })
-                                .on( "change", function() {
-                                    to.datepicker( "option", "minDate", getDate( this ) );
-                                    resetData();
-                                }),
-                                to = $( "#creationTo" ).datepicker({
-                                    minDate: creationMinDate,
-                                    maxDate: creationMaxDate,
-                                    defaultDate: creationMaxDate,
-                                    changeMonth: true,
-                                    changeYear: true,
-                                    dateFormat: dateFormat
-                                })
-                                .on( "change", function() {
-                                    from.datepicker( "option", "maxDate", getDate( this ) );
-                                    resetData();
-                                });
-                                
-                            var resolutionMinDate = new Date(data[0].resolutionMin);
-                            var resolutionMaxDate = new Date(data[0].resolutionMax);
-                            resolutionMaxDate.setDate(resolutionMaxDate.getDate() + 1);
-                            var from = $( "#resolutionFrom" )
-                                .datepicker({
-                                    minDate: resolutionMinDate,
-                                    maxDate: resolutionMaxDate,
-                                    defaultDate: resolutionMinDate,
-                                    changeMonth: true,
-                                    changeYear: true,
-                                    dateFormat: dateFormat
-                                })
-                                .on( "change", function() {
-                                    to.datepicker( "option", "minDate", getDate( this ) );
-                                    resetData();
-                                }),
-                                to = $( "#resolutionTo" ).datepicker({
-                                    minDate: resolutionMinDate,
-                                    maxDate: resolutionMaxDate,
-                                    defaultDate: resolutionMaxDate,
-                                    changeMonth: true,
-                                    changeYear: true,
-                                    dateFormat: dateFormat
-                                })
-                                .on( "change", function() {
-                                    from.datepicker( "option", "maxDate", getDate( this ) );
-                                    resetData();
-                                });
-                        });
-                    });
-        });
     }
+    
+    //Load previously scraped data from the given file
+    function loadFile(file) {
+        $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: setupApp});
+        $( "#prevDataSetSelect" ).dialog("close");//TODO: Should wait for load first, use spinner
+    }
+    
+    function setupApp() {
+        //get a list of users and their respective organizations
+        $.get("http://localhost:8080/users", function(data, status, jqXHR) {
+            data.sort(function(a,b) {
+                return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
+            });
+
+            $.each(data, function(index, user) {
+                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
+            });
+
+            $( "#setOrganizations.dialog" ).dialog({
+                modal: true,
+                width: "490px",
+                position: { at: "top" }
+            }).css("max-height", ($(window).height() * 0.9) + "px").on("submit", function(event, ui) {
+                event.preventDefault();
+
+                $("#setOrganizations .loader").css("display", "");
+
+                var data = {};
+                $("#setOrgTable>tbody>tr").each(function() {
+                    var key = $(this).find("td").first().html();
+                    var value = $(this).find("input").val();
+                    data[key] = value;
+                });
+
+                //Update the manually edited user organizations
+                $.ajax("http://localhost:8080/usersToOrgs", {data: data, type: "POST", complete: function() {
+                        $("#setOrganizations.dialog").dialog("close");
+                        $("#setOrganizations .loader").css("display", "none");
+
+                        initializeNetwork();
+                }});
+            });
+        });
+
+        //Get the available issue types
+        $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
+            $.each(data, function(index, issueType){
+                $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
+            });
+            $( "input.checkboxradio" ).checkboxradio()
+                    .change(function(){
+                        resetData();
+            });
+        });
+
+        //Get the relevant date ranges and set up the date filters
+        $.get("http://localhost:8080/dates", function(data, status, jqXHR) {
+            var creationMinDate = new Date(data[0].creationMin);
+            var creationMaxDate = new Date(data[0].creationMax);
+            creationMaxDate.setDate(creationMaxDate.getDate() + 1);
+            var from = $( "#creationFrom" )
+                .datepicker({
+                    minDate: creationMinDate,
+                    maxDate: creationMaxDate,
+                    defaultDate: creationMinDate,
+                    changeMonth: true,
+                    changeYear: true,
+                    dateFormat: dateFormat
+                })
+                .on( "change", function() {
+                    to.datepicker( "option", "minDate", getDate( this ) );
+                    resetData();
+                }),
+                to = $( "#creationTo" ).datepicker({
+                    minDate: creationMinDate,
+                    maxDate: creationMaxDate,
+                    defaultDate: creationMaxDate,
+                    changeMonth: true,
+                    changeYear: true,
+                    dateFormat: dateFormat
+                })
+                .on( "change", function() {
+                    from.datepicker( "option", "maxDate", getDate( this ) );
+                    resetData();
+                });
+
+            var resolutionMinDate = new Date(data[0].resolutionMin);
+            var resolutionMaxDate = new Date(data[0].resolutionMax);
+            resolutionMaxDate.setDate(resolutionMaxDate.getDate() + 1);
+            var from = $( "#resolutionFrom" )
+                .datepicker({
+                    minDate: resolutionMinDate,
+                    maxDate: resolutionMaxDate,
+                    defaultDate: resolutionMinDate,
+                    changeMonth: true,
+                    changeYear: true,
+                    dateFormat: dateFormat
+                })
+                .on( "change", function() {
+                    to.datepicker( "option", "minDate", getDate( this ) );
+                    resetData();
+                }),
+                to = $( "#resolutionTo" ).datepicker({
+                    minDate: resolutionMinDate,
+                    maxDate: resolutionMaxDate,
+                    defaultDate: resolutionMaxDate,
+                    changeMonth: true,
+                    changeYear: true,
+                    dateFormat: dateFormat
+                })
+                .on( "change", function() {
+                    from.datepicker( "option", "maxDate", getDate( this ) );
+                    resetData();
+                });
+        });
+    };
     
     //Get the users' organizations and redisplay the modal used to manually edit the users' organizations
     function editUserOrgsModal() {
@@ -445,7 +455,7 @@
     
     //Reset the data being displayed on the graph and table
     var fileSelection;
-    function resetData(selection) {
+    function resetData() {
         edges.clear();
         nodes.clear();
         
@@ -454,24 +464,19 @@
             table.removeChild(table.firstChild);
         }
         
-        if(selection) {
-            fileSelection = selection;
-        }else {
-            selection = fileSelection;
-        }
-        
         $("#filterContainer input").prop("disabled", true);
         $("#filterContainer .checkboxradio").checkboxradio("disable");
+        
         var enableInputs = function() {
             $("#filterContainer input").prop("disabled", false);
             $("#filterContainer .checkboxradio").checkboxradio("enable");
         };
         
         $.when(
-            $.getJSON("http://localhost:8080/" + selection + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
+            $.getJSON("http://localhost:8080/" + getFilters(), function(data, status, jqXHR){
                 redrawAll(JSON.parse(jqXHR.responseText));
             }),
-            $.getJSON("http://localhost:8080/" + selection + "_metrics" + getFilters() + "&url=" + encodeURIComponent(selection), function(data, status, jqXHR){
+            $.getJSON("http://localhost:8080/_metrics" + getFilters(), function(data, status, jqXHR){
                 buildMetricsTable(JSON.parse(jqXHR.responseText));
 
                 var numCol = 0;
@@ -495,8 +500,8 @@
         ).then(enableInputs, enableInputs);
     }
 
-    function initializeNetwork(selection) {
-        resetData(encodeURIComponent(selection));
+    function initializeNetwork() {
+        resetData();
         
         setupDefaultOptions();
 

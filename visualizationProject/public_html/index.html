@@ -230,7 +230,6 @@
     var doubleClickTime = 0;
     var threshold = 200;
     var dateFormat = "yy-mm-dd";
-    var loadedFileName;
     
     initialize();
     
@@ -276,7 +275,11 @@
             $.get("http://localhost:8080/storedData", function(data, status, jqXHR) {
                 for (file in data.files) {
                     var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
-                    $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>")
+                            .on("click", "tr td input", function(event, ui) {
+                                $(event.target).css("display", "none");
+                                $(event.target).parent().append("<div class=\"loader\"></div>");
+                    });
                 }
                         
                 $( "#prevDataSetSelect.dialog" ).dialog({
@@ -295,13 +298,15 @@
     
     //Load previously scraped data from the given file
     function loadFile(file) {
-        $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: function(){setupApp(file);}});
-        $( "#prevDataSetSelect" ).dialog("close");//TODO: Should wait for load first, use spinner
+        $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: function() {
+                setupApp(file);
+                
+                $( "#prevDataSetSelect" ).dialog("close");
+            }
+        });
     }
     
     function setupApp(file) {
-        loadedFileName = file;
-        
         //get a list of users and their respective organizations
         $.get("http://localhost:8080/users", function(data, status, jqXHR) {
             data.sort(function(a,b) {

@@ -230,6 +230,7 @@
     var doubleClickTime = 0;
     var threshold = 200;
     var dateFormat = "yy-mm-dd";
+    var loadedFileName;
     
     initialize();
     
@@ -257,8 +258,8 @@
                     var fromDate = $( "#jiraFromDateEntry" ).val();
                     
                     //Send Sir Perceval on a quest
-                    $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function() {
-                        setupApp();
+                    $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                        setupApp(data);
                         
                         $(event.currentTarget).parents(".dialog").dialog("close");
                     });
@@ -274,7 +275,7 @@
             
             $.get("http://localhost:8080/storedData", function(data, status, jqXHR) {
                 for (file in data.files) {
-                    var splitInfo = parseDecodedQuery(data.files[file]);
+                    var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
                 }
                         
@@ -294,11 +295,13 @@
     
     //Load previously scraped data from the given file
     function loadFile(file) {
-        $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: setupApp});
+        $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: function(){setupApp(file);}});
         $( "#prevDataSetSelect" ).dialog("close");//TODO: Should wait for load first, use spinner
     }
     
-    function setupApp() {
+    function setupApp(file) {
+        loadedFileName = file;
+        
         //get a list of users and their respective organizations
         $.get("http://localhost:8080/users", function(data, status, jqXHR) {
             data.sort(function(a,b) {
@@ -326,7 +329,7 @@
                 });
 
                 //Update the manually edited user organizations
-                $.ajax("http://localhost:8080/usersToOrgs", {data: data, type: "POST", complete: function() {
+                $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(file), {data: data, type: "POST", complete: function() {
                         $("#setOrganizations.dialog").dialog("close");
                         $("#setOrganizations .loader").css("display", "none");
 

@@ -40,11 +40,18 @@ def scrapeDataToNeo(graph, url, project, fromDateTime):
     buf += ']\n}'
 
     # Save buffered data for later usage
-    with open("Data/Stored/created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime(
-            "%d-%m-%Y") + "&project=" + project + "&url=" + urllib.parse.quote(url, safe=""), "w+") as storageFile:
+    fileName = "created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime(
+            "%d-%m-%Y") + "&project=" + project + "&url=" + urllib.parse.quote(url, safe="")
+
+    path = "Data/Stored/" + fileName
+    if os.path.exists(path):
+        os.remove(path)
+    with open(path, "w+") as storageFile:
         storageFile.write(buf)
 
     populateNeoDb(graph, buf)
+
+    return fileName
 
 def populateNeoDb(graph, jsonData):
     cleanDataDir()
@@ -62,7 +69,7 @@ def populateNeoDb(graph, jsonData):
             FOREACH (comm IN i.fields.comment.comments |
                 MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
                 MERGE (comment)-[:ON]->(issue)
-                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName
+                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.organization = comm.author.organization
                 MERGE (author)-[:CREATED]->(comment)
             )
                 """
@@ -71,7 +78,22 @@ def populateNeoDb(graph, jsonData):
     graph.run(query, parameters={"json": json.loads(jsonData)})
 
 # Set what organization the user is in according to data in orgData
-def setOrgs(graph, orgData):
+def setOrgs(graph, orgData, fileName):
+    path = "Data/Stored/" + fileName
+    with open(path) as file:
+        jsonData = json.loads(file.read())
+
+    for item in jsonData["items"]:
+        for comment in item["fields"]["comment"]["comments"]:
+            byteKey = bytes(comment["author"]["key"], "UTF-8")
+            if byteKey in orgData.keys():
+                comment["author"]["organization"] = str(orgData[byteKey][0], "UTF-8")
+
+    if os.path.exists(path):
+        os.remove(path)
+    with open(path, "w+") as storageFile:
+        storageFile.write(json.dumps(jsonData))
+
     for user in orgData:
         query = "MATCH (n:User) WHERE n.key = '" + user.decode("utf-8") + "' SET n.organization = '" + orgData[user][0].decode("utf-8") + "'"
 
@@ -233,12 +255,12 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
         # Send Sir Perceval on a quest to populate the Neo4j db
         if(len(splitPath) == 2 and splitPath[0] == 'quest'):
-            scrapeDataToNeo(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
+            fileName = scrapeDataToNeo(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             self.send_response(200)
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(bytes('', 'UTF-8')) # may not be needed - just need an OK
+            self.wfile.write(bytes(fileName, 'UTF-8'))
         else:
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -247,7 +269,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             if(splitPath[0] == "storedData"):
-                self.wfile.write(bytes("{\"files\":[\"" + urllib.parse.unquote("\",\"".join(os.listdir("Data/Stored"))) + "\"]}", 'UTF-8'))
+                self.wfile.write(bytes("{\"files\":[\"" + "\",\"".join(os.listdir("Data/Stored")) + "\"]}", 'UTF-8'))
             elif(splitPath[0] == "issueTypes"):
                 query = "MATCH (n:Issue) RETURN DISTINCT n.type AS type"
                 issueTypes = graph.run(query)
@@ -294,7 +316,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         if(splitPath[0] == "usersToOrgs"):
             orgData = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
 
-            setOrgs(graph, orgData)
+            setOrgs(graph, orgData, urllib.parse.unquote(parsedUrl.query).replace("fileName=", "", 1))
         elif (splitPath[0] == "load"):
             fileNameParams = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
             fileNameParams[b'url'][0] = urllib.parse.quote(fileNameParams[b'url'][0], safe="")

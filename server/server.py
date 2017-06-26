@@ -69,7 +69,7 @@ def populateNeoDb(graph, jsonData):
             FOREACH (comm IN i.fields.comment.comments |
                 MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
                 MERGE (comment)-[:ON]->(issue)
-                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.organization = comm.author.organization
+                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.organization = comm.author.organization, author.ignore = comm.author.ignoreUser
                 MERGE (author)-[:CREATED]->(comment)
             )
                 """
@@ -88,16 +88,27 @@ def setOrgs(graph, orgData, fileName):
             byteKey = bytes(comment["author"]["key"], "UTF-8")
             if byteKey in orgData.keys():
                 comment["author"]["organization"] = str(orgData[byteKey][0], "UTF-8")
+                comment["author"]["ignoreUser"] = "false"
+            else:
+                comment["author"].pop("organization", None)
+                comment["author"]["ignoreUser"] = "true"
 
     if os.path.exists(path):
         os.remove(path)
     with open(path, "w+") as storageFile:
         storageFile.write(json.dumps(jsonData))
 
+    usersStrings = []
     for user in orgData:
-        query = "MATCH (n:User) WHERE n.key = '" + user.decode("utf-8") + "' SET n.organization = '" + orgData[user][0].decode("utf-8") + "'"
+        userStr = user.decode("utf-8")
+        usersStrings.append(userStr)
+        query = "MATCH (n:User) WHERE n.key = '" + userStr + "' SET n.organization = '" + orgData[user][0].decode("utf-8") + "', n.ignore = false"
 
         graph.run(query)
+
+    query = "MATCH (n:User) WHERE NOT(n.key IN {userKeys}) SET n.organization = null, n.ignore = true"
+
+    graph.run(query, {"userKeys" : usersStrings})
 
 
 def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True):
@@ -150,7 +161,7 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
     totCommentsPerIssue = pd.DataFrame(graph.data(query))
 
     # Organizational affiliation per username
-    query = """MATCH (n:User) RETURN n.key AS author, n.organization AS organization"""
+    query = """MATCH (n:User) WHERE NOT(n.ignore) RETURN n.key AS author, n.organization AS organization"""
 
     orgData = pd.DataFrame(graph.data(query))
 
@@ -158,7 +169,7 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
     issueData = pd.merge(issueData, totCommentsPerIssue, how="right", on="issueId")
     #
     # Add column with organizational affiliation
-    issueData = pd.merge(issueData, orgData, how="outer", on="author")
+    issueData = pd.merge(issueData, orgData, how="inner", on="author")
     #
     # Remove comments from from QA and Build bots, and rows with missing values
     issueData = issueData[(issueData['author'] != "hudson") & (issueData['author'] != "hadoopqa")]
@@ -281,7 +292,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
                 self.wfile.write(bytes(json.dumps(dates.data()), 'UTF-8'))
             elif(splitPath[0] == "users"):
-                query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.organization as organization"
+                query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.organization as organization, n.ignore as ignore"
                 users = graph.run(query)
 
                 self.wfile.write(bytes(json.dumps(users.data()), 'UTF-8'))

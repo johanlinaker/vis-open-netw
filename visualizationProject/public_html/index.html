@@ -117,6 +117,7 @@
 </head>
 <body>
 <ul id="navBar">
+    <li id="newJiraSource">Select New JIRA Source</li>
     <li id="editUserOrgs">Edit User Organizations</li>
 </ul>
 <div id="mynetwork"></div>
@@ -230,6 +231,7 @@
     var doubleClickTime = 0;
     var threshold = 200;
     var dateFormat = "yy-mm-dd";
+    var fileName;
     
     initialize();
     
@@ -238,10 +240,9 @@
         tableIdColumn = desiredMetricColumns[0]; //Make "company" the first column
         
         $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
-        
-        $( "#sourceTypeSelection.dialog" ).dialog({
-            modal: true
-        });
+        $("#navBar #newJiraSource").on("click", selectJiraSourceModal);
+
+        selectJiraSourceModal();
         
         $( "#sourceTypeSelection #newDataScrape").click(function(event, ui) {
             $( "#sourceTypeSelection" ).dialog("close");
@@ -272,14 +273,12 @@
         $( "#sourceTypeSelection #loadPrevData").click(function(event, ui) {
             $( "#sourceTypeSelection" ).dialog("close");
             
+            $( "#prevDataSetSelect table tbody tr" ).remove();
+            
             $.get("http://localhost:8080/storedData", function(data, status, jqXHR) {
                 for (file in data.files) {
                     var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
-                    $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>")
-                            .on("click", "tr td input", function(event, ui) {
-                                $(event.target).css("display", "none");
-                                $(event.target).parent().append("<div class=\"loader\"></div>");
-                    });
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
                 }
                         
                 $( "#prevDataSetSelect.dialog" ).dialog({
@@ -289,6 +288,8 @@
             });
         });
         
+        setupEventHandlers();
+
         $( "#jiraFromDateEntry" ).datepicker({changeMonth: true,
                                         changeYear: true});
                                     
@@ -307,11 +308,15 @@
     }
     
     function setupApp(file) {
+        fileName = file;
+        
         //get a list of users and their respective organizations
         $.get("http://localhost:8080/users", function(data, status, jqXHR) {
             data.sort(function(a,b) {
                 return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
             });
+            
+            $("#setOrgTable>tbody tr").remove();
 
             $.each(data, function(index, user) {
                 $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
@@ -321,30 +326,13 @@
                 modal: true,
                 width: "490px",
                 position: { at: "top" }
-            }).css("max-height", ($(window).height() * 0.9) + "px").on("submit", function(event, ui) {
-                event.preventDefault();
-
-                $("#setOrganizations .loader").css("display", "");
-
-                var data = {};
-                $("#setOrgTable>tbody>tr").each(function() {
-                    var key = $(this).find("td").first().html();
-                    var value = $(this).find("input").val();
-                    data[key] = value;
-                });
-
-                //Update the manually edited user organizations
-                $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(file), {data: data, type: "POST", complete: function() {
-                        $("#setOrganizations.dialog").dialog("close");
-                        $("#setOrganizations .loader").css("display", "none");
-
-                        initializeNetwork();
-                }});
-            });
+            }).css("max-height", ($(window).height() * 0.9) + "px");
         });
 
         //Get the available issue types
         $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
+            $("#filterContainer #issueTypeFieldset").empty();
+            
             $.each(data, function(index, issueType){
                 $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
             });
@@ -360,6 +348,7 @@
             var creationMaxDate = new Date(data[0].creationMax);
             creationMaxDate.setDate(creationMaxDate.getDate() + 1);
             var from = $( "#creationFrom" )
+                .datepicker("destroy")
                 .datepicker({
                     minDate: creationMinDate,
                     maxDate: creationMaxDate,
@@ -367,28 +356,21 @@
                     changeMonth: true,
                     changeYear: true,
                     dateFormat: dateFormat
-                })
-                .on( "change", function() {
-                    to.datepicker( "option", "minDate", getDate( this ) );
-                    resetData();
                 }),
-                to = $( "#creationTo" ).datepicker({
+                to = $( "#creationTo" ).datepicker("destroy").datepicker({
                     minDate: creationMinDate,
                     maxDate: creationMaxDate,
                     defaultDate: creationMaxDate,
                     changeMonth: true,
                     changeYear: true,
                     dateFormat: dateFormat
-                })
-                .on( "change", function() {
-                    from.datepicker( "option", "maxDate", getDate( this ) );
-                    resetData();
                 });
 
             var resolutionMinDate = new Date(data[0].resolutionMin);
             var resolutionMaxDate = new Date(data[0].resolutionMax);
             resolutionMaxDate.setDate(resolutionMaxDate.getDate() + 1);
             var from = $( "#resolutionFrom" )
+                .datepicker("destroy")
                 .datepicker({
                     minDate: resolutionMinDate,
                     maxDate: resolutionMaxDate,
@@ -396,25 +378,69 @@
                     changeMonth: true,
                     changeYear: true,
                     dateFormat: dateFormat
-                })
-                .on( "change", function() {
-                    to.datepicker( "option", "minDate", getDate( this ) );
-                    resetData();
                 }),
-                to = $( "#resolutionTo" ).datepicker({
+                to = $( "#resolutionTo" ).datepicker("destroy").datepicker({
                     minDate: resolutionMinDate,
                     maxDate: resolutionMaxDate,
                     defaultDate: resolutionMaxDate,
                     changeMonth: true,
                     changeYear: true,
                     dateFormat: dateFormat
-                })
-                .on( "change", function() {
-                    from.datepicker( "option", "maxDate", getDate( this ) );
-                    resetData();
                 });
         });
     };
+    
+    function setupEventHandlers() {
+        $( "#prevDataSetSelect table tbody" ).on("click", "tr td input", function(event, ui) {
+            $(event.target).css("display", "none");
+            $(event.target).parent().append("<div class=\"loader\"></div>");
+        });
+        
+        $( "#setOrganizations.dialog" ).on("submit", function(event, ui) {
+                event.preventDefault();
+
+                $("#setOrganizations .loader").css("display", "");
+
+                var data = {};
+                $("#setOrgTable>tbody>tr").each(function() {
+                    var key = $(this).find("td").first().html();
+                    var value = $(this).find("input").val();
+                    data[key] = value;
+                });
+
+                //Update the manually edited user organizations
+                $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(fileName), {data: data, type: "POST", complete: function() {
+                        $("#setOrganizations.dialog").dialog("close");
+                        $("#setOrganizations .loader").css("display", "none");
+
+                        initializeNetwork();
+                }});
+            });
+            
+            $( "#creationFrom" )
+                .on( "change", function() {
+                    $( "#creationTo" ).datepicker( "option", "minDate", getDate( this ) );
+                    resetData();
+                });
+                
+            $( "#creationTo" )
+                .on( "change", function() {
+                    $( "#creationFrom" ).datepicker( "option", "maxDate", getDate( this ) );
+                    resetData();
+                });
+                
+            $( "#resolutionFrom" )
+                .on( "change", function() {
+                    $( "#resolutionTo" ).datepicker( "option", "minDate", getDate( this ) );
+                    resetData();
+                });
+                
+            $( "#resolutionTo" )
+                .on( "change", function() {
+                    $( "#resolutionFrom" ).datepicker( "option", "maxDate", getDate( this ) );
+                    resetData();
+                });
+    }
     
     //Get the users' organizations and redisplay the modal used to manually edit the users' organizations
     function editUserOrgsModal() {
@@ -434,6 +460,12 @@
                 width: "490px",
                 position: { at: "top" }
             });
+        });
+    }
+    
+    function selectJiraSourceModal() {
+        $( "#sourceTypeSelection.dialog" ).dialog({
+            modal: true
         });
     }
     

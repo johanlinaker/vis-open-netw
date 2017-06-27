@@ -273,29 +273,23 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(bytes(fileName, 'UTF-8'))
         else:
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Credentials', 'true')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-
             if(splitPath[0] == "storedData"):
-                self.wfile.write(bytes("{\"files\":[\"" + "\",\"".join(os.listdir("Data/Stored")) + "\"]}", 'UTF-8'))
+                response =  "{\"files\":[\"" + "\",\"".join(os.listdir("Data/Stored")) + "\"]}"
             elif(splitPath[0] == "issueTypes"):
                 query = "MATCH (n:Issue) RETURN DISTINCT n.type AS type"
                 issueTypes = graph.run(query)
 
-                self.wfile.write(bytes(json.dumps(issueTypes.data()), 'UTF-8'))
+                response = json.dumps(issueTypes.data())
             elif(splitPath[0] == "dates"):
                 query = "MATCH (n:Issue) RETURN MIN(n.createDate) AS creationMin, MAX(n.createDate) AS creationMax, MIN(n.resolutionDate) AS resolutionMin, MAX(n.resolutionDate) AS resolutionMax"
                 dates = graph.run(query)
 
-                self.wfile.write(bytes(json.dumps(dates.data()), 'UTF-8'))
+                response = json.dumps(dates.data())
             elif(splitPath[0] == "users"):
                 query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.organization as organization, n.ignore as ignore"
                 users = graph.run(query)
 
-                self.wfile.write(bytes(json.dumps(users.data()), 'UTF-8'))
+                response = json.dumps(users.data())
             else:
                 if (len(keys) != 0 and 'issueTypes' in keys): # if there are no issueTypes then there is no response
                     issueTypes = parsedQuery['issueTypes'][0].split()
@@ -304,18 +298,33 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     resolutionFromDate = parsedQuery['resolutionFromDate'][0] if 'resolutionFromDate' in keys else None
                     resolutionToDate = parsedQuery['resolutionToDate'][0] if 'resolutionToDate' in keys else None
                     unresolved = parsedQuery['unResolved'][0] if 'unResolved' in keys else None
-                    res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False)
-                    res = calcWeights(res)
-                    res = genNetwork(res)
 
+                    try:
+                        res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False)
+                        res = calcWeights(res)
+                        res = genNetwork(res)
+                    except (ZeroDivisionError, KeyError) as e:
+                        self.send_header('Access-Control-Allow-Credentials', 'true')
+                        self.send_header('Access-Control-Allow-Origin', '*')
+                        self.send_error(500, explain=str(type(e)).split("'")[1])
+                        return
                     try:
                         file = open("Data/calculated" + splitPath[0] + ".json")
                     except IOError:
+                        self.send_header('Access-Control-Allow-Credentials', 'true')
+                        self.send_header('Access-Control-Allow-Origin', '*')
                         self.send_error(404, self.path + " does not exist.")
                         return
-                    self.wfile.write(bytes(file.read(), 'UTF-8'))
+                    response = file.read()
                 else:
-                    self.wfile.write(bytes(' ', 'UTF-8'))
+                    response = ' '
+
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(bytes(response, 'UTF-8'))
         return
 
     def do_POST(self):

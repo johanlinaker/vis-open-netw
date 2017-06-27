@@ -91,6 +91,9 @@
     #prevDataSetSelect table tbody input {
         width: 79px;
     }
+    #errorHeader {
+        color: red;
+    }
     .issueTypeFilter {
         margin: 10px;
         margin-left: 0;
@@ -130,6 +133,10 @@
 <div id="mynetwork"></div>
 <div id="extraInfoContainer">
     <h1 style="display:none;"></h1>
+    <div id="errorHeader" style="display:none;">
+        <h2>Error - Unable to calculate metrics, likely due to insufficient data available for one or more organizations</h1>
+        <h3>Try selecting more issue types and/or loosening the time filter</h2>
+    </div>
     <table id="metricsTable"></table>
 </div>
 <div id="filterContainer">
@@ -506,7 +513,13 @@
         $("#filterContainer input").prop("disabled", true);
         $("#filterContainer .checkboxradio").checkboxradio("disable");
         
-        var enableInputs = function() {
+        var enableInputs = function(x) {
+            if(x.statusText === "error") {
+                $("#extraInfoContainer #errorHeader").css("display", "");
+            }else {
+                $("#extraInfoContainer #errorHeader").css("display", "none");
+            }
+            
             $("#filterContainer input").prop("disabled", false);
             $("#filterContainer .checkboxradio").checkboxradio("enable");
         };

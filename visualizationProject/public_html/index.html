@@ -86,6 +86,7 @@
     }
     #prevDataSetSelect table tbody td {
         text-align: center;
+        padding-bottom: 8px;
     }
     #prevDataSetSelect table tbody input {
         width: 79px;
@@ -288,6 +289,8 @@
             $( "#prevDataSetSelect table tbody tr" ).remove();
             
             $.get("http://localhost:8080/storedData", function(data, status, jqXHR) {
+                data.files.sort();
+                
                 for (file in data.files) {
                     var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");

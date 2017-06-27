@@ -16,6 +16,8 @@ import urllib
 
 import py2neo
 
+neo4jLoc = "http://neo4j:lund101@localhost:7474/db/data/"
+
 def cleanDataDir():
     folder = "Data"
     for file in os.listdir(folder):
@@ -257,7 +259,7 @@ def genNetwork(issueData):
 
 class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        graph = py2neo.Graph("http://neo4j:lund101@localhost:7474/db/data/")
+        graph = py2neo.Graph(neo4jLoc)
 
         parsedUrl = urlparse.urlparse(self.path)
         splitPath = parsedUrl.path.lstrip("/").split("/")
@@ -328,7 +330,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         return
 
     def do_POST(self):
-        graph = py2neo.Graph("http://neo4j:lund101@localhost:7474/db/data/")
+        graph = py2neo.Graph(neo4jLoc)
 
         parsedUrl = urlparse.urlparse(self.path)
         splitPath = parsedUrl.path.lstrip("/").split("/")

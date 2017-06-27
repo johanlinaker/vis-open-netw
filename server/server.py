@@ -102,9 +102,9 @@ def setOrgs(graph, orgData, fileName):
     for user in orgData:
         userStr = user.decode("utf-8")
         usersStrings.append(userStr)
-        query = "MATCH (n:User) WHERE n.key = '" + userStr + "' SET n.organization = '" + orgData[user][0].decode("utf-8") + "', n.ignore = false"
+        query = "MATCH (n:User) WHERE n.key = {userKey} SET n.organization = {org}, n.ignore = false"
 
-        graph.run(query)
+        graph.run(query, {"userKey" : userStr, "org" : orgData[user][0].decode("utf-8")})
 
     query = "MATCH (n:User) WHERE NOT(n.key IN {userKeys}) SET n.organization = null, n.ignore = true"
 

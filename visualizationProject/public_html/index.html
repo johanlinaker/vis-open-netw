@@ -37,8 +37,17 @@
         width: 100%;
         padding: 0;
     }
+    #setOrgTable thead tr th:last-child, #setOrgTable tbody tr td:last-child {
+        width: 50px;
+    }
+    #setOrgTable tbody tr td:last-child { /*Not the greatest selector - should be for all checkbox td's*/
+        text-align: center;
+    }
     #setOrgTable input {
         width: 100%;
+    }
+    #setOrgTable input[type="checkbox"] {
+        width: initial;
     }
     #setOrgTable tbody td {
         word-wrap: break-word;
@@ -209,6 +218,9 @@
                     <th>
                         Organization
                     </th>
+                    <th>
+                        Ignore
+                    </th>
                 </tr>
             </thead>
             <tbody>
@@ -310,25 +322,8 @@
     function setupApp(file) {
         fileName = file;
         
-        //get a list of users and their respective organizations
-        $.get("http://localhost:8080/users", function(data, status, jqXHR) {
-            data.sort(function(a,b) {
-                return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
-            });
-            
-            $("#setOrgTable>tbody tr").remove();
-
-            $.each(data, function(index, user) {
-                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
-            });
-
-            $( "#setOrganizations.dialog" ).dialog({
-                modal: true,
-                width: "490px",
-                position: { at: "top" }
-            }).css("max-height", ($(window).height() * 0.9) + "px");
-        });
-
+        editUserOrgsModal();
+        
         //Get the available issue types
         $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
             $("#filterContainer #issueTypeFieldset").empty();
@@ -397,49 +392,51 @@
         });
         
         $( "#setOrganizations.dialog" ).on("submit", function(event, ui) {
-                event.preventDefault();
+            event.preventDefault();
 
-                $("#setOrganizations .loader").css("display", "");
+            $("#setOrganizations .loader").css("display", "");
 
-                var data = {};
-                $("#setOrgTable>tbody>tr").each(function() {
-                    var key = $(this).find("td").first().html();
-                    var value = $(this).find("input").val();
+            var data = {};
+            $("#setOrgTable>tbody>tr").each(function() {
+                var key = $(this).find("td").first().html();
+                var value = $(this).find("input.organization").val();
+                if($(this).find("input.ignore:checked").length === 0) {
                     data[key] = value;
-                });
-
-                //Update the manually edited user organizations
-                $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(fileName), {data: data, type: "POST", complete: function() {
-                        $("#setOrganizations.dialog").dialog("close");
-                        $("#setOrganizations .loader").css("display", "none");
-
-                        initializeNetwork();
-                }});
+                }
             });
-            
-            $( "#creationFrom" )
-                .on( "change", function() {
-                    $( "#creationTo" ).datepicker( "option", "minDate", getDate( this ) );
-                    resetData();
-                });
-                
-            $( "#creationTo" )
-                .on( "change", function() {
-                    $( "#creationFrom" ).datepicker( "option", "maxDate", getDate( this ) );
-                    resetData();
-                });
-                
-            $( "#resolutionFrom" )
-                .on( "change", function() {
-                    $( "#resolutionTo" ).datepicker( "option", "minDate", getDate( this ) );
-                    resetData();
-                });
-                
-            $( "#resolutionTo" )
-                .on( "change", function() {
-                    $( "#resolutionFrom" ).datepicker( "option", "maxDate", getDate( this ) );
-                    resetData();
-                });
+
+            //Update the manually edited user organizations
+            $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(fileName), {data: data, type: "POST", complete: function() {
+                    $("#setOrganizations.dialog").dialog("close");
+                    $("#setOrganizations .loader").css("display", "none");
+
+                    initializeNetwork();
+            }});
+        });
+
+        $( "#creationFrom" )
+            .on( "change", function() {
+                $( "#creationTo" ).datepicker( "option", "minDate", getDate( this ) );
+                resetData();
+            });
+
+        $( "#creationTo" )
+            .on( "change", function() {
+                $( "#creationFrom" ).datepicker( "option", "maxDate", getDate( this ) );
+                resetData();
+            });
+
+        $( "#resolutionFrom" )
+            .on( "change", function() {
+                $( "#resolutionTo" ).datepicker( "option", "minDate", getDate( this ) );
+                resetData();
+            });
+
+        $( "#resolutionTo" )
+            .on( "change", function() {
+                $( "#resolutionFrom" ).datepicker( "option", "maxDate", getDate( this ) );
+                resetData();
+            });
     }
     
     //Get the users' organizations and redisplay the modal used to manually edit the users' organizations
@@ -450,16 +447,18 @@
             data.sort(function(a,b) {
                 return (b.username.toUpperCase()) < (a.username.toUpperCase()) ? 1 : -1;
             });
+            
+            $("#setOrgTable>tbody tr").remove();
 
             $.each(data, function(index, user) {
-                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input value=\"" + user.organization + "\"/></td></tr>");
+                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input class=\"organization\" value=\"" + user.organization + "\"/></td><td><input class=\"ignore\" type=\"checkbox\" name=\"Ignore\" value=\"Ignore\" " + (user.ignore  === true || user.ignore === "true" ? "checked" : "") + "></td></tr>");
             });
 
             $( "#setOrganizations.dialog" ).dialog({
                 modal: true,
                 width: "490px",
                 position: { at: "top" }
-            });
+            }).css("max-height", ($(window).height() * 0.9) + "px");
         });
     }
     

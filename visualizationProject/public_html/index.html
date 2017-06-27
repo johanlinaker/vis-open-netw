@@ -686,7 +686,7 @@
     
     //Add back connected removed nodes and edges for the given node
     function addBackRemovedEdgesAndNodes(forNode){
-        if(forNode === undefined) {
+        if(forNode === null || forNode === undefined) {
             edges.add(removedEdges);
             removedEdges = [];
         }else {

@@ -501,7 +501,11 @@
     
     //Reset the data being displayed on the graph and table
     var fileSelection;
+    var resetNum = 0;
     function resetData() {
+        resetNum += 1;
+        var thisResetNum = resetNum;
+        
         edges.clear();
         nodes.clear();
         
@@ -510,25 +514,27 @@
             table.removeChild(table.firstChild);
         }
         
-        $("#filterContainer input").prop("disabled", true);
-        $("#filterContainer .checkboxradio").checkboxradio("disable");
-        
-        var enableInputs = function(x) {
+        var testForErrorHeader = function(x) {
             if(x.statusText === "error") {
                 $("#extraInfoContainer #errorHeader").css("display", "");
             }else {
                 $("#extraInfoContainer #errorHeader").css("display", "none");
             }
-            
-            $("#filterContainer input").prop("disabled", false);
-            $("#filterContainer .checkboxradio").checkboxradio("enable");
         };
         
         $.when(
             $.getJSON("http://localhost:8080/" + getFilters(), function(data, status, jqXHR){
+                if(thisResetNum !== resetNum) {
+                    return;
+                }
+                
                 redrawAll(JSON.parse(jqXHR.responseText));
             }),
             $.getJSON("http://localhost:8080/_metrics" + getFilters(), function(data, status, jqXHR){
+                if(thisResetNum !== resetNum) {
+                    return;
+                }
+                
                 buildMetricsTable(JSON.parse(jqXHR.responseText));
 
                 var numCol = 0;
@@ -549,7 +555,7 @@
                     });
                 }
             })
-        ).then(enableInputs, enableInputs);
+        ).then(testForErrorHeader, testForErrorHeader);
     }
 
     function initializeNetwork() {

@@ -71,7 +71,7 @@ def populateNeoDb(graph, jsonData):
             FOREACH (comm IN i.fields.comment.comments |
                 MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
                 MERGE (comment)-[:ON]->(issue)
-                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.organization = comm.author.organization, author.ignore = comm.author.ignoreUser
+                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
                 MERGE (author)-[:CREATED]->(comment)
             )
                 """

@@ -203,6 +203,9 @@
         <thead>
             <tr>
                 <th>
+                    
+                </th>
+                <th>
                     Data Creation Date (UTC)
                 </th>
                 <th>
@@ -302,21 +305,7 @@
         $( "#sourceTypeSelection #loadPrevData").click(function(event, ui) {
             $( "#sourceTypeSelection" ).dialog("close");
             
-            $( "#prevDataSetSelect table tbody tr" ).remove();
-            
-            $.get("http://localhost:8080/storedData", function(data, status, jqXHR) {
-                data.files.sort();
-                
-                for (file in data.files) {
-                    var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
-                    $( "#prevDataSetSelect table tbody" ).append("<tr><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
-                }
-                        
-                $( "#prevDataSetSelect.dialog" ).dialog({
-                    modal: true,
-                    width: "700px"
-                });
-            });
+            populateDataSetSelectModal();
         });
         
         setupEventHandlers();
@@ -326,6 +315,36 @@
                                     
         $("input.checkboxradio").checkboxradio();
         $("#notResolved").checkboxradio("widget").css("height", "20px").css("padding-top", "0").css("padding-bottom", "0");
+    }
+    
+    function populateDataSetSelectModal() {
+        $( "#prevDataSetSelect table tbody tr" ).remove();
+        
+        $.get("http://localhost:8080/storedData", function(data, status, jqXHR) {
+            data.files.sort();
+
+            for (file in data.files) {
+                var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
+                $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+            }
+
+            $( "#prevDataSetSelect.dialog" ).dialog({
+                modal: true,
+                width: "700px"
+            });
+        });
+    }
+    
+    //Delete previously scraped data file
+    function deleteFile(file) {
+        $.ajax("http://localhost:8080/deleteData", {data: file, type: "POST", complete: function() {
+                $( "#prevDataSetSelect" ).dialog("close");
+                
+                populateDataSetSelectModal();
+                
+                $( "#prevDataSetSelect" ).dialog("open");
+            }
+        });
     }
     
     //Load previously scraped data from the given file

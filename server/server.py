@@ -339,12 +339,19 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             orgData = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
 
             setOrgs(graph, orgData, urllib.parse.unquote(parsedUrl.query).replace("fileName=", "", 1))
-        elif (splitPath[0] == "load"):
-            fileNameParams = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
-            fileNameParams[b'url'][0] = urllib.parse.quote(fileNameParams[b'url'][0], safe="")
-            fileName = "created=" + str(fileNameParams[b'created'][0], "UTF-8") + "&from=" + str(fileNameParams[b'from'][0], "UTF-8") + "&project=" + str(fileNameParams[b'project'][0], "UTF-8") + "&url=" + fileNameParams[b'url'][0]
-            with open("Data/Stored/" + fileName) as file:
+        elif(splitPath[0] == "load"):
+            with open(self.getFilePathFromPostData()) as file:
                 populateNeoDb(graph, file.read())
+        elif(splitPath[0] == "deleteData"):
+            os.remove(self.getFilePathFromPostData())
+
+    def getFilePathFromPostData(self):
+        fileNameParams = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
+        fileNameParams[b'url'][0] = urllib.parse.quote(fileNameParams[b'url'][0], safe="")
+        fileName = "created=" + str(fileNameParams[b'created'][0], "UTF-8") + "&from=" + str(
+            fileNameParams[b'from'][0], "UTF-8") + "&project=" + str(fileNameParams[b'project'][0],
+                                                                     "UTF-8") + "&url=" + fileNameParams[b'url'][0]
+        return "Data/Stored/" + fileName
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     allow_reuse_address = True

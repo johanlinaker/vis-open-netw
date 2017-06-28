@@ -16,7 +16,7 @@ Note that there should only be one connection to the server running via ./server
 # Set-up
 
 1. Clone this repo
-2. Clone and install our [Perceval fork](https://github.com/kcamp34/perceval)
+2. Clone and install our [Perceval fork](https://github.com/johanlinaker/perceval)
     - Note that you may need to uninstall Perceval if you have a copy already
 3. Install Requirements (above), e.g., using apt-get or pip3
 4. Go to ./visualizationProject/perceval and run "python3 setup.py install"
@@ -32,7 +32,7 @@ There are some JIRA-specific elements, specifically the query used to populate t
 
 # Perceval
 
-This project uses a fork of [Perceval](https://github.com/kcamp34/perceval) that contains a change to the JIRA backend. This change allows Perceval to grab the comments for each issue.
+This project uses a fork of [Perceval](https://github.com/johanlinaker/perceval) that contains a change to the JIRA backend. This change allows Perceval to grab the comments for each issue.
 
 In the future it would be desirable to make a switch for the Perceval JIRA backend for grabbing JIRA issue comments and to create a PR in the original Perceval git repo so that the offical, supported, version of perceval can be used in this application instead of our fork.
 

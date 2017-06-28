@@ -515,6 +515,10 @@
         }
         
         var testForErrorHeader = function(x) {
+            if(thisResetNum !== resetNum) {
+                return;
+            }
+            
             if(x.statusText === "error") {
                 $("#extraInfoContainer #errorHeader").css("display", "");
             }else {

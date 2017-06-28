@@ -115,6 +115,18 @@
         display: inline-block;
         margin-bottom: -10px;
     }
+    .loader.center {
+        position: relative;
+        margin: auto;
+        margin-top: 10px;
+        display: block;
+    }
+    .loader.large {
+        width: 100px;
+        height: 100px;
+        border: 33px solid #f3f3f3;
+        border-top: 33px solid #3498db;
+    }
     @keyframes spin {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
@@ -506,6 +518,8 @@
         resetNum += 1;
         var thisResetNum = resetNum;
         
+        $("#mynetwork .loader").css("display", "");
+        
         edges.clear();
         nodes.clear();
         
@@ -514,10 +528,12 @@
             table.removeChild(table.firstChild);
         }
         
-        var testForErrorHeader = function(x) {
+        var handleAjaxCompletion = function(x) {
             if(thisResetNum !== resetNum) {
                 return;
             }
+            
+            $("#mynetwork .loader").css("display", "none");
             
             if(x.statusText === "error") {
                 $("#extraInfoContainer #errorHeader").css("display", "");
@@ -559,7 +575,7 @@
                     });
                 }
             })
-        ).then(testForErrorHeader, testForErrorHeader);
+        ).then(handleAjaxCompletion, handleAjaxCompletion);
     }
 
     function initializeNetwork() {
@@ -568,6 +584,8 @@
         setupDefaultOptions();
 
         network = new vis.Network(container, data, options);
+        
+        $(container).prepend("<div class=\"loader center large\" style=\"display:none;\"></div>");
 
         network.fit();
 

@@ -8,10 +8,6 @@ Note that there should only be one connection to the server running via ./server
 # Requirements
     Python >= 3.4
     python3-setuptools >= 20.7.0
-    python3-urllib3 >= 1.9
-    python3-pandas >= 0.20.1
-    python3-networkx >= 1.11
-    py2neo >= 3.1.2
 
 # Set-up
 
@@ -19,7 +15,10 @@ Note that there should only be one connection to the server running via ./server
 2. Clone and install our [Perceval fork](https://github.com/johanlinaker/perceval)
     - Note that you may need to uninstall Perceval if you have a copy already
 3. Install Requirements (above), e.g., using apt-get or pip3
-4. Go to ./visualizationProject/perceval and run "python3 setup.py install"
+4. Run
+```
+$ pip3 install -r requirements.txt
+```
 5. Download and boot up [neo4j](https://neo4j.com/download/community-edition/)
     - Go to http://localhost:7474/browser/ and change the default user password from "neo4j" to "lund101"
 6. Run "python3 ./server/server.py 8080 localhost"

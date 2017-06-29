@@ -147,7 +147,7 @@
     <h1 style="display:none;"></h1>
     <div id="errorHeader" style="display:none;">
         <h2>Error - Unable to calculate metrics, likely due to insufficient data available for one or more organizations</h1>
-        <h3>Try selecting more issue types and/or loosening the time filter</h2>
+        <h3>Try loosening the filters</h2>
     </div>
     <table id="metricsTable"></table>
 </div>
@@ -172,6 +172,10 @@
     <h2 class="filterHeader">Issue Type Filter: </h2>
     <fieldset id="issueTypeFieldset">
       <legend>Select Issue Types: </legend>
+    </fieldset>
+    <h2 class="filterHeader">Priority Filter: </h2>
+    <fieldset id="prioritiesFieldset">
+      <legend>Select Priorities: </legend>
     </fieldset>
 </div>
 
@@ -362,6 +366,8 @@
         
         editUserOrgsModal();
         
+        initializeNetwork();
+        
         //Get the available issue types
         $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
             $("#filterContainer #issueTypeFieldset").empty();
@@ -369,7 +375,20 @@
             $.each(data, function(index, issueType){
                 $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
             });
-            $( "input.checkboxradio" ).checkboxradio()
+            $( "#issueTypeFieldset input.checkboxradio" ).checkboxradio()
+                    .change(function(){
+                        resetData();
+            });
+        });
+        
+        //Get priorities
+        $.get("http://localhost:8080/priorities", function(data, status, jqXHR) {
+            $("#filterContainer #prioritiesFieldset").empty();
+            
+            $.each(data, function(index, priority){
+                $("#filterContainer #prioritiesFieldset").append("<label for=" + priority.priority + ">" + priority.priority + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + priority.priority + " id=" + priority.priority + ">");
+            });
+            $( "#prioritiesFieldset input.checkboxradio" ).checkboxradio()
                     .change(function(){
                         resetData();
             });
@@ -447,8 +466,6 @@
             $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(fileName), {data: data, type: "POST", complete: function() {
                     $("#setOrganizations.dialog").dialog("close");
                     $("#setOrganizations .loader").css("display", "none");
-
-                    initializeNetwork();
             }});
         });
 
@@ -517,6 +534,16 @@
         return issueTypesString !== "" ? "&issueTypes=" + issueTypesString : issueTypesString;
     }
     
+    function getPriorityFilters() {
+        var priorityString = "";
+        $.each($("#filterContainer #prioritiesFieldset input:checked"), function(index, issueTypeCheckbox){
+            priorityString = priorityString + issueTypeCheckbox.id + "+";
+        });
+        priorityString = priorityString.slice(0,-1);
+        
+        return priorityString !== "" ? "&priorities=" + priorityString : priorityString;
+    }
+    
     //Get the state of the date filters
     function getDateFilters() {
         return "&creationFromDate=" + encodeURIComponent($("#creationFrom").val()) + "&creationToDate=" + encodeURIComponent($("#creationTo").val()) + 
@@ -526,7 +553,7 @@
     
     //Get the state of all filters
     function getFilters() {
-        var filters = (getTypeFilters() + getDateFilters()).substring(1);//slice off excess '&'
+        var filters = (getTypeFilters() + getPriorityFilters() + getDateFilters()).substring(1);//slice off excess '&'
         return "?" + filters;
     }
     
@@ -598,7 +625,6 @@
     }
 
     function initializeNetwork() {
-        resetData();
         
         setupDefaultOptions();
 

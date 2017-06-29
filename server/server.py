@@ -66,7 +66,7 @@ def populateNeoDb(graph, jsonData):
             WITH {json} as data
             UNWIND data.items as i
             MERGE (issue:Issue {id:i.id}) ON CREATE
-              SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created
+              SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created, issue.priority = i.fields.priority.name
 
             FOREACH (comm IN i.fields.comment.comments |
                 MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
@@ -113,7 +113,7 @@ def setOrgs(graph, orgData, fileName):
     graph.run(query, {"userKeys" : usersStrings})
 
 
-def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True):
+def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = []):
     params = {}
     # Nbr of comments per user and issue
     # author | issueId | anchor | nbrOfComments
@@ -121,6 +121,10 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
 
     query = query + """ WHERE i.type IN {issueTypes} """
     params['issueTypes'] = issueTypes
+
+    if(len(priorities) > 0):
+        query += query + """ AND i.priority IN {priorities} """
+        params['priorities'] = priorities
 
     if(creationFromDate is not None):
         query = query + """ AND i.createDate >= {creationFromDate} """
@@ -287,6 +291,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 dates = graph.run(query)
 
                 response = json.dumps(dates.data())
+            elif(splitPath[0] == "priorities"):
+                query = "MATCH (n:Issue) RETURN DISTINCT n.priority AS priority"
+                priorities = graph.run(query)
+
+                response = json.dumps(priorities.data())
             elif(splitPath[0] == "users"):
                 query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.organization as organization, n.ignore as ignore"
                 users = graph.run(query)
@@ -300,9 +309,10 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     resolutionFromDate = parsedQuery['resolutionFromDate'][0] if 'resolutionFromDate' in keys else None
                     resolutionToDate = parsedQuery['resolutionToDate'][0] if 'resolutionToDate' in keys else None
                     unresolved = parsedQuery['unResolved'][0] if 'unResolved' in keys else None
+                    priorities = parsedQuery['priorities'][0].split() if 'priorities' in keys else []
 
                     try:
-                        res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False)
+                        res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities)
                         res = calcWeights(res)
                         res = genNetwork(res)
                     except (ZeroDivisionError, KeyError) as e:

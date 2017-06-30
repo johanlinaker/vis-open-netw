@@ -1,0 +1,102 @@
+This is an overview on the front-end javascript code.
+
+There are four main parts to the front-end. There are the filters, the
+data-displayers (the graph and the table), the user-to-organization mapping
+editor modal, and the JIRA source selection modals.
+
+Upon the loading of the application's webpage initialization is done, which
+includes setting up multiple event handlers for everything from modal button
+presses to graph click filtering, to table click filtering. A modal for
+selecting a JIRA source is brought up for the user to interact with. Beyond
+this intial set up the rest of the app runs through event handling depending
+on what the user clicks or double clicks.
+
+The following functions are dedicated to set-up:
+
+initialize() - Sets up some event handlers, calls setupEventHandlers() and
+selectJiraSourceModal() in order to open the first modal to prompt the user to
+interact with the application. May be able to combine some of this function
+with setupEventHandlers(). Edit the variable "desiredMetricColumns" to have
+the table populated with different metrics. Called at page load.
+setupEventHandlers() - Sets up various event handlers. Called by initialize()
+at page load.
+setupApp() - Populates the filters, calls initializeNetwork() and
+editUserOrgsModal() in order to open the user-to-organization editing modal to
+prompt the user to interact with the application again. Called when data is
+loaded from the backend after a new or previously scraped dataset has been
+selected. 
+initializeNetwork() - Sets up the network in its given container and sets up
+event handlers to do with the graph and table. May be refactored to place the
+event handler set up for the table elsewhere. Called by setupApp() after a new
+or previously scraped dataset has been selected.
+
+
+The following functions are dedicated to the selection of a JIRA source and
+the modals involved:
+
+populateDataSetSelectModal() - Calls the back-end to populate the
+dataSetSelectModal with information on the files that have data that has been
+previously scraped. Called when the user clicks the button to view previously
+scraped dataset information.
+deleteFile() - Deletes a stored data file that has data that was previously
+scraped. Called when user clicks the button to delete a previously scraped
+dataset file.
+loadFile() - Loads a stored data file that has data that was previously
+scraped. Called when user clicks the button to load a dataset.
+editUserOrgsModal() - Loads and displays the modal that prompts the user to
+manually edit the organizations that the scraped users are in. Called by
+setupApp(), after a dataset has been loaded, or when the user clicks the
+relevant navigation bar button. 
+selectJiraSourceModal() - Displays the modal which prompts the user to select
+between loading a new datasource or a previously scraped file. Called at page
+load or when the user clicks the relevant navigation bar button.
+
+The following functions are dedicated to scraping the filter status:
+
+getTypeFilters() - Get the state of the issue type filters. Called by
+getFilters().
+getPriorityFilters() - Get the state of the priority filters. Called by 
+getFilters().
+getDateFilters() - Get the state of the date filters. Called by 
+getFilters().
+getFilters() - Get the state of all the filters. Called before a backend call
+for new data is made.
+
+The following functions are dedicated to manipulating, filtering and populating the graph:
+
+resetData() - Reset the nodes and edges in the graph and the data in the table
+dependant on the state of the filters. Called whenever a filter changes.
+redrawAll() - Redraw the graph. Called by resetData().
+removeUnconnectedMembers() - Remove all nodes and edges that are not directly
+connected to the given node. Called by doClick() whenever a click is done on
+an appropriate element.
+addBackRemovedEdgesAndNodes() - Add back removed edges and nodes that are
+connected to the given node, or all removed edges and nodes if no node is
+given. Called by doClick() whenever a click is done on an appropriate element.
+doClick() - Select an appropriate action depending on what was clicked and the
+current state of the graph. Called by handleClick() when a relevant element is
+clicked once (not double-clicked).
+getHierarchy() - Put the graph into hierarchal mode and filter the graph
+depending on what was selected. May be able to partially combine with
+removeUnconnectedMembers(). Called when the graph is double-clicked.
+setupDefaultOptions() - Return an object containing the default options for
+the graph. Called by doClick() after there hasn't been a double-click.
+
+The following functions are dedicated to manipulating, filtering, and
+populating the table:
+
+displayEdgeData() - Show edge data in place of the table. Called when an edge
+is clicked.
+buildMetricsTable() - Build the metrics table from a JSON response. Called
+when a filter changes.
+filterTable() - Filter the table based on the selected node. Called when a
+node is clicked on the graph or a table row is selected.
+resetExtraInfo() - Go back to showing the table instead of the extra edge
+information. Called when a non-edge is clicked.
+
+The following functions are utility functions:
+
+handleClick() - Detects if a single click was done or a double click. Called
+when clicks occur.
+getDate() - Gets the date from the given element.
+parseDecodedQuery() - Parses an already-decoded query string.

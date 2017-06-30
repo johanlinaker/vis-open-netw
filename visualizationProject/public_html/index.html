@@ -492,6 +492,8 @@
                 $( "#resolutionFrom" ).datepicker( "option", "maxDate", getDate( this ) );
                 resetData();
             });
+            
+        $( "#notResolved" ).on( "click", resetData);
     }
     
     //Get the users' organizations and redisplay the modal used to manually edit the users' organizations

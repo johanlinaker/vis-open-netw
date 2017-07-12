@@ -1,4 +1,4 @@
-# vis-open-netw
+# StakeViz
 StakeViz is a tool for analysis and visualization of stakeholders involved in Open Source Software (OSS) communities. It scrapes communication and contribution data from community repositories and creates networks based on how stakeholders (individuals and/or organizations) has interacted (e.g., commented on the same issue, or contributed a commit to the same file). The tool then allows you to visually analyze who collaborates with whom, and leverage centrlality metrics to point out those with the higest influence, and that contributed the most. 
 
 Currently this application is limited to only scrape data from JIRA issue trackers enabled by custimization to the [Perceval](https://github.com/grimoirelab/perceval) project. Support for further types of repositories will be added in the future.

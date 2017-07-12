@@ -240,6 +240,9 @@
                         Display Name
                     </th>
                     <th>
+                        Email Address
+                    </th>
+                    <th>
                         Organization
                     </th>
                     <th>
@@ -508,12 +511,12 @@
             $("#setOrgTable>tbody tr").remove();
 
             $.each(data, function(index, user) {
-                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td><input class=\"organization\" value=\"" + user.organization + "\"/></td><td><input class=\"ignore\" type=\"checkbox\" name=\"Ignore\" value=\"Ignore\" " + (user.ignore  === true || user.ignore === "true" ? "checked" : "") + "></td></tr>");
+                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td>" + user.emailAddress + "</td><td><input class=\"organization\" value=\"" + user.organization + "\"/></td><td><input class=\"ignore\" type=\"checkbox\" name=\"Ignore\" value=\"Ignore\" " + (user.ignore  === true || user.ignore === "true" ? "checked" : "") + "></td></tr>");
             });
 
             $( "#setOrganizations.dialog" ).dialog({
                 modal: true,
-                width: "490px",
+                width: "700px",
                 position: { at: "top" }
             }).css("max-height", ($(window).height() * 0.9) + "px");
         });

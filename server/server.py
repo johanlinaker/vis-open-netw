@@ -71,13 +71,26 @@ def populateNeoDb(graph, jsonData):
             FOREACH (comm IN i.fields.comment.comments |
                 MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
                 MERGE (comment)-[:ON]->(issue)
-                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
+                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.emailAddress = comm.author.emailAddress, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
                 MERGE (author)-[:CREATED]->(comment)
             )
                 """
 
     # Send Cypher query.
     graph.run(query, parameters={"json": json.loads(jsonData)})
+
+    # Add email-domain as defatult organization
+    query = """MATCH (n:User) RETURN n.key AS key, n.emailAddress AS emailAddress, n.organization AS organization"""
+
+    userData = pd.DataFrame(graph.data(query))
+    if len(userData.index) > 0:
+        userData['emailAddress'] = userData['emailAddress'].replace({' at ': '@', ' dot ': '.'}, regex=True)
+        userData['organization'] = userData['emailAddress'].str.extract(r'\@(.*)\.')
+
+        for user in userData.itertuples():
+            index, emailAdress, key, organization = user
+            query = "MATCH (n:User) WHERE n.key = '" + key + "' SET n.emailAddress = '" + emailAdress + "', n.organization = '" + organization + "'"
+            graph.run(query)
 
 # Set what organization the user is in according to data in orgData
 def setOrgs(graph, orgData, fileName):
@@ -176,9 +189,8 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
     #
     # Add column with organizational affiliation
     issueData = pd.merge(issueData, orgData, how="inner", on="author")
-    #
-    # Remove comments from from QA and Build bots, and rows with missing values
-    issueData = issueData[(issueData['author'] != "hudson") & (issueData['author'] != "hadoopqa")]
+
+    # Remove rows with missing values
     issueData = issueData.dropna()
 
     # Aggregate based on organizational affiliation
@@ -297,7 +309,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
                 response = json.dumps(priorities.data())
             elif(splitPath[0] == "users"):
-                query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.organization as organization, n.ignore as ignore"
+                query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.emailAddress AS emailAddress, n.organization AS organization, n.ignore AS ignore"
                 users = graph.run(query)
 
                 response = json.dumps(users.data())

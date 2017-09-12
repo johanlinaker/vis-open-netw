@@ -36,7 +36,7 @@ We expect the interview to take about 30 minutes of your time.
 
 **What time do I have to consider this invitation?**
 
-We wish to have your confirmation at latest 17 September 2017.
+We wish to have your confirmation at latest 24 September 2017.
 
 **How do I agree to participate in this research?**
 

@@ -142,6 +142,7 @@
     <li id="newJiraSource">Select New JIRA Source</li>
     <li id="editUserOrgs">Edit User Organizations</li>
 </ul>
+<p>Current Data File: <span id="dataName"></span></p>
 <div id="mynetwork"></div>
 <div id="extraInfoContainer">
     <h1 style="display:none;"></h1>
@@ -299,7 +300,8 @@
                     //Send Sir Perceval on a quest
                     $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
                         setupApp(data);
-                        
+                        $("#dataName").text(data);
+                        $("#jiraUrlDialog .loader").css("display", "none");
                         $(event.currentTarget).parents(".dialog").dialog("close");
                     });
             });
@@ -358,15 +360,14 @@
     function loadFile(file) {
         $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: function() {
                 setupApp(file);
-                
+                $("#dataName").text(file);   
                 $( "#prevDataSetSelect" ).dialog("close");
-            }
-        });
+            }        });
     }
     
     function setupApp(file) {
         fileName = file;
-        
+
         editUserOrgsModal();
         
         initializeNetwork();

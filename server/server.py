@@ -1,4 +1,3 @@
-
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 import threading
@@ -86,8 +85,9 @@ def populateNeoDb(graph, jsonData):
     userData = pd.DataFrame(graph.data(query))
     if len(userData.index) > 0:
         userData['emailAddress'] = userData['emailAddress'].replace({' at ': '@', ' dot ': '.'}, regex=True)
-        if userData['organization'][1] is None or userData['organization'].str == 'null':
-            userData['organization'] = userData['emailAddress'].str.extract(r'\@(.*)\.')
+        for org in userData['organization']:
+            if org is None:
+                userData['organization'] = userData['emailAddress'].str.extract(r'\@(.*)\.')
 
         for user in userData.itertuples():
             index, emailAdress, key, organization = user

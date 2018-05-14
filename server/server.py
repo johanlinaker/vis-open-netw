@@ -1,3 +1,4 @@
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 import threading
@@ -85,7 +86,8 @@ def populateNeoDb(graph, jsonData):
     userData = pd.DataFrame(graph.data(query))
     if len(userData.index) > 0:
         userData['emailAddress'] = userData['emailAddress'].replace({' at ': '@', ' dot ': '.'}, regex=True)
-        userData['organization'] = userData['emailAddress'].str.extract(r'\@(.*)\.')
+        if userData['organization'][1] is None or userData['organization'].str == 'null':
+            userData['organization'] = userData['emailAddress'].str.extract(r'\@(.*)\.')
 
         for user in userData.itertuples():
             index, emailAdress, key, organization = user
@@ -95,8 +97,9 @@ def populateNeoDb(graph, jsonData):
 # Set what organization the user is in according to data in orgData
 def setOrgs(graph, orgData, fileName):
     path = "Data/Stored/" + fileName
+    oldPath = "Data/Stored/" + fileName + "_old"
     with open(path) as file:
-        jsonData = json.loads(file.read())
+       	jsonData = json.loads(file.read())
 
     for item in jsonData["items"]:
         for comment in item["fields"]["comment"]["comments"]:
@@ -118,7 +121,6 @@ def setOrgs(graph, orgData, fileName):
         userStr = user.decode("utf-8")
         usersStrings.append(userStr)
         query = "MATCH (n:User) WHERE n.key = {userKey} SET n.organization = {org}, n.ignore = false"
-
         graph.run(query, {"userKey" : userStr, "org" : orgData[user][0].decode("utf-8")})
 
     query = "MATCH (n:User) WHERE NOT(n.key IN {userKeys}) SET n.organization = null, n.ignore = true"

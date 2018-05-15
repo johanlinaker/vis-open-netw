@@ -85,13 +85,13 @@ def populateNeoDb(graph, jsonData):
     userData = pd.DataFrame(graph.data(query))
     if len(userData.index) > 0:
         userData['emailAddress'] = userData['emailAddress'].replace({' at ': '@', ' dot ': '.'}, regex=True)
-        for org in userData['organization']:
-            if org is None:
-                userData['organization'] = userData['emailAddress'].str.extract(r'\@(.*)\.')
+        defaultOrg = userData['emailAddress'].str.extract(r'\@(.*)\.')
 
         for user in userData.itertuples():
-            index, emailAdress, key, organization = user
-            query = "MATCH (n:User) WHERE n.key = '" + key + "' SET n.emailAddress = '" + emailAdress + "', n.organization = '" + organization + "'"
+            index, emailAddress, key, organization = user
+            if organization is None:
+                organization = defaultOrg[index]
+            query = "MATCH (n:User) WHERE n.key = '" + key + "' SET n.emailAddress = '" + emailAddress + "', n.organization = '" + organization + "'"
             graph.run(query)
 
 # Set what organization the user is in according to data in orgData

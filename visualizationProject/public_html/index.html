@@ -470,6 +470,7 @@
             $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(fileName), {data: data, type: "POST", complete: function() {
                     $("#setOrganizations.dialog").dialog("close");
                     $("#setOrganizations .loader").css("display", "none");
+                    resetData();
             }});
         });
 

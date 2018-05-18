@@ -1,3 +1,4 @@
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 import threading
@@ -138,7 +139,7 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
     params['issueTypes'] = issueTypes
 
     if(len(priorities) > 0):
-        query += query + """ AND i.priority IN {priorities} """
+        query = query + """ AND i.priority IN {priorities} """
         params['priorities'] = priorities
 
     if(creationFromDate is not None):
@@ -241,7 +242,11 @@ def genNetwork(issueData):
     degree = nx.degree_centrality(netw)
     betweeness = nx.betweenness_centrality(netw, weight="weight")
     closeness = nx.closeness_centrality(netw, distance="weight")
-    eigenvector = nx.eigenvector_centrality(netw)
+#    eigenvector = nx.eigenvector_centrality_numpy(netw)
+    try:
+        eigenvector = nx.eigenvector_centrality(netw)
+    except:
+        eigenvector = nx.eigenvector_centrality_numpy(netw)
 
     # pos = nx.spring_layout(netw)  # positions for all nodes
     #
@@ -274,6 +279,69 @@ def genNetwork(issueData):
     centralityData.to_json("Data/calculated_metrics.json", "records")
 
     return centralityData
+
+def getEdgeData(graph, issueTypes, org1, org2, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = []):
+    params = {}
+    # Nbr of comments per user and issue
+    # author | issueId | anchor | nbrOfComments
+    query = """MATCH (n:User)-[r1:CREATED]->(c:Comment)-[r2:ON]->(i:Issue) """
+
+    query = query + """ WHERE i.type IN {issueTypes} """
+    params['issueTypes'] = issueTypes
+
+    query = query + """ AND n.organization = {org1} """
+    params['org1'] = org1
+
+    if(len(priorities) > 0):
+        query = query + """ AND i.priority IN {priorities} """
+        params['priorities'] = priorities
+
+    if(creationFromDate is not None):
+        query = query + """ AND i.createDate >= {creationFromDate} """
+        params['creationFromDate'] = creationFromDate
+    if(creationToDate is not None):
+        query = query + """ AND i.createDate < {creationToDate} """
+        params['creationToDate'] = creationToDate
+
+    firstResolutionFilter = True
+    if (resolutionFromDate is not None or resolutionToDate is not None):
+        query = query + """ AND ( """
+
+        if (resolutionFromDate is not None):
+            query = query + """ i.resolutionDate >= {resolutionFromDate} """
+            params['resolutionFromDate'] = resolutionFromDate
+            firstResolutionFilter = False
+
+        if (resolutionToDate is not None):
+            if not firstResolutionFilter:
+                query = query + """ AND """
+            query = query + """ i.resolutionDate < {resolutionToDate} """
+            params['resolutionToDate'] = resolutionToDate
+            firstResolutionFilter = False
+
+        query = query + """ ) """
+    if unresolved == True:
+        if not firstResolutionFilter:
+            query = query + """ OR """
+        else:
+            query = query + """ AND """
+        query = query + """ i.resolutionDate IS NULL """
+
+    query = query + """ RETURN n.key as author, i.key as issueId, count(r1) as numOfComments"""
+    issueData = pd.DataFrame(graph.data(query, parameters=params))
+
+    query = """MATCH (n:User)-[r1:CREATED]->(c:Comment)-[r2:ON]->(i:Issue) WHERE n.organization = {org2} RETURN i.key as issueId"""
+    collaborators = pd.DataFrame(graph.data(query, parameters={'org2': org2}))
+
+    query = """MATCH (c:Comment)-[r:ON]->(i:Issue) RETURN i.key as issueId, count(r) as issueComments"""
+    commentCounts = pd.DataFrame(graph.data(query, parameters={'org2': org2}))
+
+    issueData = pd.merge(issueData, collaborators, how="inner", on="issueId")
+    issueData = pd.merge(issueData, commentCounts, how="inner", on="issueId")
+
+    issueData = issueData.groupby(['author', 'issueId', 'issueComments']).sum().reset_index()
+
+    return issueData.to_json("Data/calculated_edge.json", "records")
 
 class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -324,11 +392,15 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     resolutionToDate = parsedQuery['resolutionToDate'][0] if 'resolutionToDate' in keys else None
                     unresolved = parsedQuery['unResolved'][0] if 'unResolved' in keys else None
                     priorities = parsedQuery['priorities'][0].split() if 'priorities' in keys else []
+                    org1 = parsedQuery['org1'][0] if 'org1' in keys else None
+                    org2 = parsedQuery['org2'][0] if 'org2' in keys else None
 
                     try:
                         res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities)
                         res = calcWeights(res)
                         res = genNetwork(res)
+                        if (org1 is not None and org2 is not None):
+                            res2 = getEdgeData(graph, issueTypes, org1, org2, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities)
                     except (ZeroDivisionError, KeyError) as e:
                         self.send_header('Access-Control-Allow-Credentials', 'true')
                         self.send_header('Access-Control-Allow-Origin', '*')

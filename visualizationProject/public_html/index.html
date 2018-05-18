@@ -1,5 +1,6 @@
 <html>
 <head>
+  <meta charset="utf-8"/>
   <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
   <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
   <script src="http://visjs.org/dist/vis.js"></script>
@@ -24,6 +25,11 @@
     }
     #metricsTable {
         height: 100%;
+        display: block;
+        overflow-x: auto;
+    }
+    #edgeTable {
+        height: auto;
         display: block;
         overflow-x: auto;
     }
@@ -151,6 +157,7 @@
         <h3>Try loosening the filters</h3>
     </div>
     <table id="metricsTable"></table>
+    <table id="edgeTable"></table>
 </div>
 <div id="filterContainer">
     <h2 class="filterHeader">Time Filter: </h2>
@@ -260,6 +267,7 @@
 </div>
 <script type="text/javascript">
     var desiredMetricColumns;
+    var desiredEdgeColumns;
     var tableIdColumn;
     var gephiImported;
     var container = document.getElementById('mynetwork');
@@ -277,6 +285,7 @@
     
     function initialize() {
         desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"]; //Only display these columns in the table
+        desiredEdgeColumns = ["author", "issueId", "issueComments", "numOfComments"];
         tableIdColumn = desiredMetricColumns[0]; //Make "company" the first column
         
         $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
@@ -300,7 +309,8 @@
                     //Send Sir Perceval on a quest
                     $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
                         setupApp(data);
-                        $("#dataName").text(data);
+			var splitInfo = parseDecodedQuery(decodeURIComponent(data))
+                        $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
                         $("#jiraUrlDialog .loader").css("display", "none");
                         $(event.currentTarget).parents(".dialog").dialog("close");
                     });
@@ -324,6 +334,8 @@
                                     
         $("input.checkboxradio").checkboxradio();
         $("#notResolved").checkboxradio("widget").css("height", "20px").css("padding-top", "0").css("padding-bottom", "0");
+
+        $("#edgeTable").css("display","none");
     }
     
     function populateDataSetSelectModal() {
@@ -360,7 +372,8 @@
     function loadFile(file) {
         $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: function() {
                 setupApp(file);
-                $("#dataName").text(file);   
+		var splitInfo = parseDecodedQuery(decodeURIComponent(file));
+                $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);  
                 $( "#prevDataSetSelect" ).dialog("close");
             }        });
     }
@@ -670,11 +683,20 @@
     //Display the edge data in place of the table
     function displayEdgeData(selectionData) {
         if(selectionData.nodes.length === 0 && selectionData.edges.length === 1) {
+            table = document.getElementById("edgeTable");
+            while (table.firstChild) {
+                table.removeChild(table.firstChild);
+            }
+
             $("#metricsTable").css("display","none");
-            
+            $("#edgeTable").css("display","");            
+
             var edge = edges.get(selectionData.edges[0]);
             var header = $("#extraInfoContainer h1");
-            header.text(edge.from + " vs. " + edge.to);
+            header.text(edge.from + " > " + edge.to);
+            $.getJSON("http://localhost:8080/_edge" + getFilters() + "&org1=" + edge.from + "&org2=" + edge.to, function(data, status, jqXHR){
+		buildEdgeTable(JSON.parse(jqXHR.responseText));                
+            });
             header.css("display","");
         }
     }
@@ -715,6 +737,35 @@
         }
     }
     
+    function buildEdgeTable(edgeJSON){
+        // EXTRACT VALUE FOR HTML HEADER.
+        var col = [];
+        for (var i = 0; i < edgeJSON.length; i++) {
+            for (var key in edgeJSON[i]) {
+                if (col.indexOf(key) === -1 && desiredEdgeColumns.indexOf(key) !== -1) {
+                    col.push(key);
+                }
+            }
+        }
+        // CREATE DYNAMIC TABLE.
+        var table = document.getElementById("edgeTable");
+        // CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
+        var tr = table.insertRow(-1);                   // TABLE ROW.
+        for (var i = 0; i < col.length; i++) {
+            var th = document.createElement("th");      // TABLE HEADER.
+            th.innerHTML = col[i];
+            tr.appendChild(th);
+        }
+        // ADD JSON DATA TO THE TABLE AS ROWS.
+        for (var i = 0; i < edgeJSON.length; i++) {
+            tr = table.insertRow(-1);
+            for (var j = 0; j < col.length; j++) {
+                var tabCell = tr.insertCell(-1);
+                tabCell.innerHTML = edgeJSON[i][col[j]];
+            }
+        }
+    }
+
     //Re-add removed nodes and edges to the graph
     var removedEdges = [];
     var removedNodes = [];
@@ -870,6 +921,7 @@
     function resetExtraInfo(){
         $("#extraInfoContainer h1").css("display","none");
         $("#metricsTable").css("display","");
+        $("#edgeTable").css("display","none");
     }
     
     //Change to a hierarchal graph structure with the selected node being the top node

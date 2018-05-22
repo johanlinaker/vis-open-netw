@@ -46,7 +46,7 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
             perceval = percGithub.GitHub(owner=owner, repository=repository)
     elif hostname is not None and user is not None:
         type = "gerrit"
-        perceval = percGithub.GitHub(hostname=hostname, user=user)
+        perceval = percGerrit.Gerrit(hostname=hostname, user=user)
     issues = perceval.fetch(from_date=fromDateTime)
 
     buf = '{\n\"items\": ['

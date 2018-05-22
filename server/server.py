@@ -9,6 +9,8 @@ import pandas as pd
 import networkx as nx
 from perceval.backends.core import jira as percJira
 from perceval.backends.core import github as percGithub
+from perceval.backends.core import gerrit as percGerrit
+
 
 import json
 import os
@@ -30,7 +32,7 @@ def cleanDataDir():
         except Exception as e:
             print(e)
 
-def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, api_token=None, fromDateTime=None):
+def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, api_token=None, hostname=None, user=None, fromDateTime=None):
     perceval = None
     type = None
     if url is not None and project is not None:
@@ -42,6 +44,9 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
             perceval = percGithub.GitHub(owner=owner, repository=repository, api_token=api_token)
         else:
             perceval = percGithub.GitHub(owner=owner, repository=repository)
+    elif hostname is not None and user is not None:
+        type = "gerrit"
+        perceval = percGithub.GitHub(hostname=hostname, user=user)
     issues = perceval.fetch(from_date=fromDateTime)
 
     buf = '{\n\"items\": ['
@@ -60,6 +65,8 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
         filename = filename + "&project=" + project + "&url=" + urllib.parse.quote(url, safe="")
     elif type is "github": 
         filename = filename + "&owner=" + owner + "&repository=" + repository
+    elif type is "gerrit":
+        filename = filename + "&hostname=" + hostname
 
     path = "Data/Stored/" + filename
     if os.path.exists(path):
@@ -107,6 +114,19 @@ def populateNeoDb(graph, jsonData, type):
                     MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.user_data.login, comment.body = comm.body
                     MERGE (comment)-[:ON]->(issue)
                     MERGE (author:User {key: comm.user_data.login}) ON CREATE SET author.name = comm.user_data.login, author.displayName = comm.user_data.name, author.emailAddress = comm.user_data.email, author.organization = comm.user_data.company, author.ignore = CASE comm.user_data.ignoreUser WHEN "true" THEN true ELSE false END
+                    MERGE (author)-[:CREATED]->(comment)
+                )
+                """
+    elif type is "gerrit":
+        query = """
+                WITH {json} as data
+                UNWIND data.items as i
+                MERGE (issue:Issue {id:i.id}) ON CREATE
+                  SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created, issue.priority = i.fields.priority.name
+                FOREACH (comm IN i.fields.comment.comments |
+                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
+                    MERGE (comment)-[:ON]->(issue)
+                    MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.emailAddress = comm.author.emailAddress, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
                     MERGE (author)-[:CREATED]->(comment)
                 )
                 """
@@ -415,6 +435,8 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 fileName = scrapeDataToNeo(graph, url=urllib.parse.unquote(splitPath[1]), project=urllib.parse.unquote(parsedQuery['project'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             elif ('owner' in keys and 'repository' in keys and 'api_token' in keys):
                 fileName = scrapeDataToNeo(graph, owner=urllib.parse.unquote(parsedQuery['owner'][0]), repository=urllib.parse.unquote(parsedQuery['repository'][0]), api_token=urllib.parse.unquote(parsedQuery['api_token'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
+            elif 'hostname' in keys and 'user' in keys:
+                filename = scrapeDataToNeo(graph, hostname=urllib.parse.unquote(parsedQuery['hostname'][0]), user=urllib.parse.unquote(parsedQuery['user'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             self.send_response(200)
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -493,15 +515,16 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
         if(splitPath[0] == "usersToOrgs"):
             orgData = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
-
             setOrgs(graph, orgData, urllib.parse.unquote(parsedUrl.query).replace("fileName=", "", 1))
         elif(splitPath[0] == "load"):
             filename = self.getFilePathFromPostData()
             with open(filename) as file:
                 if "url" in filename and "project" in filename:
                     populateNeoDb(graph, file.read(), "jira")
-                if "owner" in filename and "repository" in filename:
+                elif "owner" in filename and "repository" in filename:
                     populateNeoDb(graph, file.read(), "github")
+                elif "hostname" in filename:
+                    populateNeoDb(graph, file.read(), "gerrit")
         elif(splitPath[0] == "deleteData"):
             os.remove(self.getFilePathFromPostData())
 
@@ -514,6 +537,8 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             fileName = fileName + "&project=" + str(fileNameParams[b'project'][0], "UTF-8") + "&url=" + fileNameParams[b'url'][0]
         elif b'owner' in fileNameParams and b'repository' in fileNameParams:
             fileName = fileName + "&owner=" + str(fileNameParams[b'owner'][0], "UTF-8") + "&repository=" + str(fileNameParams[b'repository'][0], "UTF-8")
+        elif b'hostname' in fileNameParams:
+            fileName = fileName + "&hostname=" + str(fileNameParams[b'hostname'][0], "UTF-8")
         return "Data/Stored/" + fileName
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

@@ -64,6 +64,18 @@
     #jiraUrlDialog input.ui-button {
         margin-top: 5px;
     }
+    #githubDialog div>input {
+        display: block;
+    }
+    #githubDialog input.ui-button {
+        margin-top: 5px;
+    }
+    #gerritDialog div>input {
+        display: block;
+    }
+    #gerritDialog input.ui-button {
+        margin-top: 5px;
+    }
     #navBar {
         width: 98%;
         list-style-type: none;
@@ -150,7 +162,7 @@
 </head>
 <body>
 <ul id="navBar">
-    <li id="newJiraSource">Select New JIRA Source</li>
+    <li id="newSource">Select New Source</li>
     <li id="editUserOrgs">Edit User Organizations</li>
 </ul>
 <p>Current Data File: <span id="dataName"></span></p>
@@ -200,7 +212,7 @@
 <div id="dataTypeSelection" class="dialog" style="display:none;" title="Data Type Selection">
     <input id="selectJIRA" class="ui-button ui-widget ui-corner-all" value="JIRA">
     <input id="selectGitHub" class="ui-button ui-widget ui-corner-all" value="GitHub">
-    <input id="selectGERRIT" class="ui-button ui-widget ui-corner-all" value="GERRIT"> 
+    <input id="selectGerrit" class="ui-button ui-widget ui-corner-all" value="Gerrit"> 
 </div>
 
 <div id="jiraUrlDialog" class="dialog" style="display:none;" title="JIRA URL">
@@ -243,6 +255,23 @@
   </form>
 </div>
 
+<div id="gerritDialog" class="dialog" style="display:none;" title="Gerrit">
+  <form>
+    <div>
+    <label for="gerritHostnameEntry">Enter a Gerrit hostname:</label>
+    <input name="gerritHostname" id="gerritHostnameEntry"/>
+    </div>
+    <div>
+    <label for="gerritUserEntry">Enter your username:</label>
+    <input name="gerritUser" id="gerritUserEntry"/>
+    </div>
+    <div>
+    <label for="gerritFromDateEntry">Enter a From Date (based on issue updated date):</label>
+    <input type="text" id="gerritFromDateEntry" name="gerritFromDate">
+    </div>
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
+  </form>
+</div>
 
 <div id="prevDataSetSelect" class="dialog" style="display:none;" title="Select a DataSet to Load">
     <table>
@@ -255,7 +284,7 @@
                     Data Creation Date (UTC)
                 </th>
                 <th>
-                    API URL/Owner
+                    API URL/Owner/Hostname
                 </th>
                 <th>
                     Project/Repo
@@ -323,7 +352,7 @@
         tableIdColumn = desiredMetricColumns[0]; //Make "company" the first column
         
         $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
-        $("#navBar #newJiraSource").on("click", selectJiraSourceModal);
+        $("#navBar #newSource").on("click", selectJiraSourceModal);
 
         selectJiraSourceModal();
        
@@ -387,6 +416,34 @@
                 });
             });
 
+            $( "#dataTypeSelection #selectGerrit").click(function(event, ui) {
+                $( "#dataTypeSelection" ).dialog("close");
+
+                $( "#gerritDialog>form" )
+                    .on("submit", function(event, ui) {
+                        event.preventDefault();
+
+                        $("#gerritDialog .loader").css("display", "");
+
+                        var hostname = $( "#gerritHostnameEntry" ).val();
+                        var user = $( "#gerritUserEntry" ).val();
+                        var fromDate = $( "#gerritFromDateEntry" ).val();
+
+                        //Send Sir Perceval on a quest
+                        $.get("http://localhost:8080/quest/?hostname=" + encodeURIComponent(hostname) + "&user=" + encodeURIComponent(user) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                            setupApp(data);
+                            var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                            $("#dataName").text(splitInfo["hostname"] + " scraped on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                            $("#gerritDialog .loader").css("display", "none");
+                            $(event.currentTarget).parents(".dialog").dialog("close");
+                        });
+                });
+
+                $( "#gerritDialog.dialog" ).dialog({
+                    modal: true
+                });
+            });
+
             $( "#dataTypeSelection.dialog" ).dialog({
                 modal: true
             });
@@ -405,7 +462,10 @@
 
         $( "#githubFromDateEntry" ).datepicker({changeMonth: true,
                                         changeYear: true});
-                                    
+        
+        $( "#gerritFromDateEntry" ).datepicker({changeMonth: true,
+                                        changeYear: true});
+                            
         $("input.checkboxradio").checkboxradio();
         $("#notResolved").checkboxradio("widget").css("height", "20px").css("padding-top", "0").css("padding-bottom", "0");
 
@@ -420,10 +480,12 @@
 
             for (file in data.files) {
                 var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
-                if (typeof splitInfo["owner"] === 'undefined') {
+                if (typeof splitInfo["owner"] === 'undefined' && typeof splitInfo["hostname"] === 'undefined') {
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
-                } else if (typeof splitInfo["url"] === 'undefined') {
+                } else if (typeof splitInfo["url"] === 'undefined' && typeof splitInfo["hostname"] === 'undefined') {
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["owner"] + "</td><td>" + splitInfo["repository"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                } else if (typeof splitInfo["owner"] === 'undefined' && typeof splitInfo["url"] === 'undefined') {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["hostname"] + "</td><td>NA</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
                 }
             }
 

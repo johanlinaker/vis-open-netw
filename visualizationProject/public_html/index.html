@@ -90,6 +90,11 @@
         position: relative;
         margin: 5 auto;
     }
+    #dataTypeSelection input {
+        display: block;
+        position: relative;
+        margin: 5 auto;
+    }
     #prevDataSetSelect table tbody td {
         text-align: center;
         padding-bottom: 8px;
@@ -192,6 +197,12 @@
     <input id="loadPrevData" class="ui-button ui-widget ui-corner-all" value="Previously Scraped Data">
 </div>
 
+<div id="dataTypeSelection" class="dialog" style="display:none;" title="Data Type Selection">
+    <input id="selectJIRA" class="ui-button ui-widget ui-corner-all" value="JIRA">
+    <input id="selectGitHub" class="ui-button ui-widget ui-corner-all" value="GitHub">
+    <input id="selectGERRIT" class="ui-button ui-widget ui-corner-all" value="GERRIT"> 
+</div>
+
 <div id="jiraUrlDialog" class="dialog" style="display:none;" title="JIRA URL">
   <form>
     <div>
@@ -210,6 +221,29 @@
   </form>
 </div>
 
+<div id="githubDialog" class="dialog" style="display:none;" title="GitHub">
+  <form>
+    <div>
+    <label for="githubOwnerEntry">Enter a GitHub Owner:</label>
+    <input name="githubOwner" id="githubOwnerEntry"/>
+    </div>
+    <div>
+    <label for="githubRepoEntry">Enter a Repository:</label>
+    <input name="githubRepo" id="githubRepoEntry"/>
+    </div>
+    <div>
+    <label for="githubTokenEntry">Enter a Access Token:</label>
+    <input name="githubToken" id="githubTokenEntry"/>
+    </div>
+    <div>
+    <label for="githubFromDateEntry">Enter a From Date (based on issue updated date):</label>
+    <input type="text" id="githubFromDateEntry" name="githubFromDate">
+    </div>
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
+  </form>
+</div>
+
+
 <div id="prevDataSetSelect" class="dialog" style="display:none;" title="Select a DataSet to Load">
     <table>
         <thead>
@@ -221,10 +255,10 @@
                     Data Creation Date (UTC)
                 </th>
                 <th>
-                    API URL
+                    API URL/Owner
                 </th>
                 <th>
-                    Project
+                    Project/Repo
                 </th>
                 <th>
                     Scrape Date
@@ -236,7 +270,7 @@
     </table>
 </div>
 
-<div id='setOrganizations' class="dialog" style="display:none;" title="Set Organizations">
+<div id="setOrganizations" class="dialog" style="display:none;" title="Set Organizations">
     <form>
         <table id="setOrgTable">
             <thead>
@@ -292,31 +326,68 @@
         $("#navBar #newJiraSource").on("click", selectJiraSourceModal);
 
         selectJiraSourceModal();
-        
+       
         $( "#sourceTypeSelection #newDataScrape").click(function(event, ui) {
             $( "#sourceTypeSelection" ).dialog("close");
             
-            $( "#jiraUrlDialog>form" )
-                .on("submit", function(event, ui) {
-                    event.preventDefault();
+            $( "#dataTypeSelection #selectJIRA").click(function(event, ui) {
+                $( "#dataTypeSelection" ).dialog("close");
+
+                $( "#jiraUrlDialog>form" )
+                    .on("submit", function(event, ui) {
+                        event.preventDefault();
             
-                    $("#jiraUrlDialog .loader").css("display", "");
+                        $("#jiraUrlDialog .loader").css("display", "");
             
-                    var url = $( "#jiraUrlEntry" ).val();
-                    var project = $( "#jiraProjectEntry" ).val();
-                    var fromDate = $( "#jiraFromDateEntry" ).val();
+                        var url = $( "#jiraUrlEntry" ).val();
+                        var project = $( "#jiraProjectEntry" ).val();
+                        var fromDate = $( "#jiraFromDateEntry" ).val();
                     
-                    //Send Sir Perceval on a quest
-                    $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
-                        setupApp(data);
-			var splitInfo = parseDecodedQuery(decodeURIComponent(data))
-                        $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
-                        $("#jiraUrlDialog .loader").css("display", "none");
-                        $(event.currentTarget).parents(".dialog").dialog("close");
-                    });
-            });
+                        //Send Sir Perceval on a quest
+                        $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                            setupApp(data);
+			    var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                            $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                            $("#jiraUrlDialog .loader").css("display", "none");
+                            $(event.currentTarget).parents(".dialog").dialog("close");
+                        });
+                });
             
-            $( "#jiraUrlDialog.dialog" ).dialog({
+                $( "#jiraUrlDialog.dialog" ).dialog({
+                    modal: true
+                });
+            });
+
+            $( "#dataTypeSelection #selectGitHub").click(function(event, ui) {
+                $( "#dataTypeSelection" ).dialog("close");
+
+                $( "#githubDialog>form" )
+                    .on("submit", function(event, ui) {
+                        event.preventDefault();
+             
+                        $("#githubDialog .loader").css("display", "");
+
+                        var owner = $( "#githubOwnerEntry" ).val();
+                        var repo = $( "#githubRepoEntry" ).val();
+                        var token = $( "#githubTokenEntry" ).val();
+                        var fromDate = $( "#githubFromDateEntry" ).val();
+
+                        //Send Sir Perceval on a quest
+                        $.get("http://localhost:8080/quest/?owner=" + encodeURIComponent(owner) + "&repository=" + encodeURIComponent(repo) + "&api_token=" + encodeURIComponent(token) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) { 
+                            setupApp(data);
+                            var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                            $("#dataName").text(splitInfo["repository"] + " scraped from " + splitInfo["owner"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                            $("#githubDialog .loader").css("display", "none");
+                            $(event.currentTarget).parents(".dialog").dialog("close");
+                        });
+                });
+
+                $( "#githubDialog.dialog" ).dialog({
+                    modal: true
+                });
+            });
+
+            $( "#dataTypeSelection.dialog" ).dialog({
                 modal: true
             });
         });
@@ -330,6 +401,9 @@
         setupEventHandlers();
 
         $( "#jiraFromDateEntry" ).datepicker({changeMonth: true,
+                                        changeYear: true});
+
+        $( "#githubFromDateEntry" ).datepicker({changeMonth: true,
                                         changeYear: true});
                                     
         $("input.checkboxradio").checkboxradio();
@@ -346,7 +420,11 @@
 
             for (file in data.files) {
                 var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
-                $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                if (typeof splitInfo["owner"] === 'undefined') {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                } else if (typeof splitInfo["url"] === 'undefined') {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["owner"] + "</td><td>" + splitInfo["repository"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                }
             }
 
             $( "#prevDataSetSelect.dialog" ).dialog({

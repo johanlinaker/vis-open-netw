@@ -8,6 +8,7 @@ import urllib.parse as urlparse
 import pandas as pd
 import networkx as nx
 from perceval.backends.core import jira as percJira
+from perceval.backends.core import github as percGithub
 
 import json
 import os
@@ -29,8 +30,18 @@ def cleanDataDir():
         except Exception as e:
             print(e)
 
-def scrapeDataToNeo(graph, url, project, fromDateTime):
-    perceval = percJira.Jira(url, project=project)
+def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, api_token=None, fromDateTime=None):
+    perceval = None
+    type = None
+    if url is not None and project is not None:
+        perceval = percJira.Jira(url, project=project)
+        type = "jira"
+    elif owner is not None and repository is not None:
+        type= "github"
+        if api_token is not None:
+            perceval = percGithub.GitHub(owner=owner, repository=repository, api_token=api_token)
+        else:
+            perceval = percGithub.GitHub(owner=owner, repository=repository)
     issues = perceval.fetch(from_date=fromDateTime)
 
     buf = '{\n\"items\": ['
@@ -43,45 +54,68 @@ def scrapeDataToNeo(graph, url, project, fromDateTime):
     buf += ']\n}'
 
     # Save buffered data for later usage
-    fileName = "created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime(
-            "%d-%m-%Y") + "&project=" + project + "&url=" + urllib.parse.quote(url, safe="")
+    filename = "created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime(
+            "%d-%m-%Y")
+    if type is "jira":
+        filename = filename + "&project=" + project + "&url=" + urllib.parse.quote(url, safe="")
+    elif type is "github": 
+        filename = filename + "&owner=" + owner + "&repository=" + repository
 
-    path = "Data/Stored/" + fileName
+    path = "Data/Stored/" + filename
     if os.path.exists(path):
         os.remove(path)
     with open(path, "w+") as storageFile:
         storageFile.write(buf)
 
-    populateNeoDb(graph, buf)
+    populateNeoDb(graph, buf, type)
 
-    return fileName
+    return filename
 
-def populateNeoDb(graph, jsonData):
+def populateNeoDb(graph, jsonData, type):
     cleanDataDir()
 
     graph.delete_all()
     graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
 
     # Build query - This is JIRA-backend-specific
-    query = """
-            WITH {json} as data
-            UNWIND data.items as i
-            MERGE (issue:Issue {id:i.id}) ON CREATE
-              SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created, issue.priority = i.fields.priority.name
+    if type is "jira":
+        query = """
+                WITH {json} as data
+                UNWIND data.items as i
+                MERGE (issue:Issue {id:i.id}) ON CREATE
+                  SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created, issue.priority = i.fields.priority.name
 
-            FOREACH (comm IN i.fields.comment.comments |
-                MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
+                FOREACH (comm IN i.fields.comment.comments |
+                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
+                    MERGE (comment)-[:ON]->(issue)
+                    MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.emailAddress = comm.author.emailAddress, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
+                    MERGE (author)-[:CREATED]->(comment)
+                )
+                """
+    elif type is "github":
+        query = """
+                WITH {json} as data
+                UNWIND data.items as i
+                MERGE (issue:Issue {id:i.number}) ON CREATE
+                  SET issue.key = i.title, issue.type = i.state, issue.resolutionDate = i.closed_at, issue.updateDate = i.updated_at, issue.createDate = i.created_at, issue.priority = ""
+		MERGE (comment:Comment {id: i.id}) ON CREATE SET comment.author = i.user_data.login, comment.body = i.body
                 MERGE (comment)-[:ON]->(issue)
-                MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.emailAddress = comm.author.emailAddress, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
+                MERGE (author:User {key: i.user_data.login}) ON CREATE SET author.name = i.user_data.login, author.displayName = i.user_data.name, author.emailAddress = i.user_data.email, author.organization = i.user_data.company, author.ignore = CASE i.user_data.ignoreUser WHEN "true" THEN true ELSE false END
                 MERGE (author)-[:CREATED]->(comment)
-            )
+
+                FOREACH (comm IN i.comments_data |
+                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.user_data.login, comment.body = comm.body
+                    MERGE (comment)-[:ON]->(issue)
+                    MERGE (author:User {key: comm.user_data.login}) ON CREATE SET author.name = comm.user_data.login, author.displayName = comm.user_data.name, author.emailAddress = comm.user_data.email, author.organization = comm.user_data.company, author.ignore = CASE comm.user_data.ignoreUser WHEN "true" THEN true ELSE false END
+                    MERGE (author)-[:CREATED]->(comment)
+                )
                 """
 
     # Send Cypher query.
     graph.run(query, parameters={"json": json.loads(jsonData)})
 
-    # Add email-domain as defatult organization
-    query = """MATCH (n:User) RETURN n.key AS key, n.emailAddress AS emailAddress, n.organization AS organization"""
+    # Add defaults values for null fields
+    query = """MATCH (n:User) RETURN n.key AS key, n.emailAddress AS emailAddress, n.organization AS organization, n.displayName AS displayName"""
 
     userData = pd.DataFrame(graph.data(query))
     if len(userData.index) > 0:
@@ -89,28 +123,50 @@ def populateNeoDb(graph, jsonData):
         defaultOrg = userData['emailAddress'].str.extract(r'\@(.*)\.')
 
         for user in userData.itertuples():
-            index, emailAddress, key, organization = user
+            index, displayName, emailAddress, key, organization = user
+            if emailAddress is None:
+                emailAddress = "No Email Given"
+                defaultOrg[index] = "No Org Given"
             if organization is None:
                 organization = defaultOrg[index]
-            query = "MATCH (n:User) WHERE n.key = '" + key + "' SET n.emailAddress = '" + emailAddress + "', n.organization = '" + organization + "'"
+            if displayName is None:
+                displayName = key
+            query = "MATCH (n:User) WHERE n.key = '" + key + "' SET n.emailAddress = '" + emailAddress + "', n.organization = '" + organization + "', n.displayName = '" + displayName + "'"
             graph.run(query)
 
 # Set what organization the user is in according to data in orgData
 def setOrgs(graph, orgData, fileName):
     path = "Data/Stored/" + fileName
-    oldPath = "Data/Stored/" + fileName + "_old"
     with open(path) as file:
        	jsonData = json.loads(file.read())
 
-    for item in jsonData["items"]:
-        for comment in item["fields"]["comment"]["comments"]:
-            byteKey = bytes(comment["author"]["key"], "UTF-8")
+    if "url" in fileName and "project" in fileName:
+        for item in jsonData["items"]:
+            for comment in item["fields"]["comment"]["comments"]:
+                byteKey = bytes(comment["author"]["key"], "UTF-8")
+                if byteKey in orgData.keys():
+                    comment["author"]["organization"] = str(orgData[byteKey][0], "UTF-8")
+                    comment["author"]["ignoreUser"] = "false"
+                else:
+                    comment["author"].pop("organization", None)
+                    comment["author"]["ignoreUser"] = "true"
+    elif "owner" in fileName and "repository" in fileName:
+        for item in jsonData["items"]:
+            byteKey = bytes(item["user_data"]["login"], "UTF-8")
             if byteKey in orgData.keys():
-                comment["author"]["organization"] = str(orgData[byteKey][0], "UTF-8")
-                comment["author"]["ignoreUser"] = "false"
+                item["user_data"]["company"] = str(orgData[byteKey][0], "UTF-8")
+                item["user_data"]["ignoreUser"] = "false"
             else:
-                comment["author"].pop("organization", None)
-                comment["author"]["ignoreUser"] = "true"
+                item["user_data"].pop("company", None)
+                item["user_data"]["ignoreUser"] = "true"
+            for comment in item["comments_data"]:
+                byteKey = bytes(comment["user_data"]["login"], "UTF-8")
+                if byteKey in orgData.keys():
+                    comment["user_data"]["company"] = str(orgData[byteKey][0], "UTF-8")
+                    comment["user_data"]["ignoreUser"] = "false"
+                else:
+                    comment["user_data"].pop("company", None)
+                    comment["user_data"]["ignoreUser"] = "true"
 
     if os.path.exists(path):
         os.remove(path)
@@ -354,7 +410,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
         # Send Sir Perceval on a quest to populate the Neo4j db
         if(len(splitPath) == 2 and splitPath[0] == 'quest'):
-            fileName = scrapeDataToNeo(graph, urllib.parse.unquote(splitPath[1]), urllib.parse.unquote(parsedQuery['project'][0]), datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
+            fileName = None
+            if ('project' in keys):
+                fileName = scrapeDataToNeo(graph, url=urllib.parse.unquote(splitPath[1]), project=urllib.parse.unquote(parsedQuery['project'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
+            elif ('owner' in keys and 'repository' in keys and 'api_token' in keys):
+                fileName = scrapeDataToNeo(graph, owner=urllib.parse.unquote(parsedQuery['owner'][0]), repository=urllib.parse.unquote(parsedQuery['repository'][0]), api_token=urllib.parse.unquote(parsedQuery['api_token'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             self.send_response(200)
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -436,17 +496,24 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
 
             setOrgs(graph, orgData, urllib.parse.unquote(parsedUrl.query).replace("fileName=", "", 1))
         elif(splitPath[0] == "load"):
-            with open(self.getFilePathFromPostData()) as file:
-                populateNeoDb(graph, file.read())
+            filename = self.getFilePathFromPostData()
+            with open(filename) as file:
+                if "url" in filename and "project" in filename:
+                    populateNeoDb(graph, file.read(), "jira")
+                if "owner" in filename and "repository" in filename:
+                    populateNeoDb(graph, file.read(), "github")
         elif(splitPath[0] == "deleteData"):
             os.remove(self.getFilePathFromPostData())
 
     def getFilePathFromPostData(self):
         fileNameParams = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
-        fileNameParams[b'url'][0] = urllib.parse.quote(fileNameParams[b'url'][0], safe="")
         fileName = "created=" + str(fileNameParams[b'created'][0], "UTF-8") + "&from=" + str(
-            fileNameParams[b'from'][0], "UTF-8") + "&project=" + str(fileNameParams[b'project'][0],
-                                                                     "UTF-8") + "&url=" + fileNameParams[b'url'][0]
+            fileNameParams[b'from'][0], "UTF-8")
+        if b'url' in fileNameParams and b'project' in fileNameParams:
+            fileNameParams[b'url'][0] = urllib.parse.quote(fileNameParams[b'url'][0], safe="")
+            fileName = fileName + "&project=" + str(fileNameParams[b'project'][0], "UTF-8") + "&url=" + fileNameParams[b'url'][0]
+        elif b'owner' in fileNameParams and b'repository' in fileNameParams:
+            fileName = fileName + "&owner=" + str(fileNameParams[b'owner'][0], "UTF-8") + "&repository=" + str(fileNameParams[b'repository'][0], "UTF-8")
         return "Data/Stored/" + fileName
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

@@ -406,7 +406,7 @@ def getEdgeData(graph, issueTypes, org1, org2, creationFromDate = None, creation
     query = query + """ RETURN n.key as author, i.key as issueId, count(r1) as numOfComments"""
     issueData = pd.DataFrame(graph.data(query, parameters=params))
 
-    query = """MATCH (n:User)-[r1:CREATED]->(c:Comment)-[r2:ON]->(i:Issue) WHERE n.organization = {org2} RETURN i.key as issueId"""
+    query = """MATCH (n:User)-[r1:CREATED]->(c:Comment)-[r2:ON]->(i:Issue) WHERE n.organization = {org2} RETURN DISTINCT i.key as issueId"""
     collaborators = pd.DataFrame(graph.data(query, parameters={'org2': org2}))
 
     query = """MATCH (c:Comment)-[r:ON]->(i:Issue) RETURN i.key as issueId, count(r) as issueComments"""

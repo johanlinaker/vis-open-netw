@@ -1,4 +1,3 @@
-
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 import threading
@@ -10,7 +9,8 @@ import networkx as nx
 from perceval.backends.core import jira as percJira
 from perceval.backends.core import github as percGithub
 from perceval.backends.core import gerrit as percGerrit
-
+from perceval.backends.core import mbox as percMbox
+import gerritAPI as gerrit
 
 import json
 import os
@@ -32,7 +32,7 @@ def cleanDataDir():
         except Exception as e:
             print(e)
 
-def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, api_token=None, hostname=None, user=None, fromDateTime=None):
+def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, api_token=None, hostname=None, uri=None, dir=None, fromDateTime=None):
     perceval = None
     type = None
     if url is not None and project is not None:
@@ -44,9 +44,12 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
             perceval = percGithub.GitHub(owner=owner, repository=repository, api_token=api_token)
         else:
             perceval = percGithub.GitHub(owner=owner, repository=repository)
-    elif hostname is not None and user is not None:
+    elif hostname is not None:
         type = "gerrit"
-        perceval = percGerrit.Gerrit(hostname=hostname, user=user)
+        perceval = gerrit.GerritAPI(hostname)
+    elif dir is not None: 
+        type = "email"
+        perceval = percMbox.MBox(uri, dir)
     issues = perceval.fetch(from_date=fromDateTime)
 
     buf = '{\n\"items\": ['
@@ -66,7 +69,9 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
     elif type is "github": 
         filename = filename + "&owner=" + owner + "&repository=" + repository
     elif type is "gerrit":
-        filename = filename + "&hostname=" + hostname
+        filename = filename + "&hostname=" + urllib.parse.quote(hostname, safe="")
+    elif type is "email":
+        filename = filename + "&uri=" + urllib.parse.quote(uri, safe="") + "&directory=" + dir
 
     path = "Data/Stored/" + filename
     if os.path.exists(path):
@@ -83,6 +88,7 @@ def populateNeoDb(graph, jsonData, type):
 
     graph.delete_all()
     graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
+    jsonData = json.loads(jsonData)
 
     # Build query - This is JIRA-backend-specific
     if type is "jira":
@@ -90,10 +96,10 @@ def populateNeoDb(graph, jsonData, type):
                 WITH {json} as data
                 UNWIND data.items as i
                 MERGE (issue:Issue {id:i.id}) ON CREATE
-                  SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created, issue.priority = i.fields.priority.name
+                  SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created, issue.priority = i.fields.priority.name, issue.src = "jira"
 
                 FOREACH (comm IN i.fields.comment.comments |
-                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
+                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body, comment.src = "jira"
                     MERGE (comment)-[:ON]->(issue)
                     MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.emailAddress = comm.author.emailAddress, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
                     MERGE (author)-[:CREATED]->(comment)
@@ -104,35 +110,59 @@ def populateNeoDb(graph, jsonData, type):
                 WITH {json} as data
                 UNWIND data.items as i
                 MERGE (issue:Issue {id:i.number}) ON CREATE
-                  SET issue.key = i.title, issue.type = i.state, issue.resolutionDate = i.closed_at, issue.updateDate = i.updated_at, issue.createDate = i.created_at, issue.priority = ""
-		MERGE (comment:Comment {id: i.id}) ON CREATE SET comment.author = i.user_data.login, comment.body = i.body
+                  SET issue.key = i.title, issue.type = i.state, issue.resolutionDate = i.closed_at, issue.updateDate = i.updated_at, issue.createDate = i.created_at, issue.priority = "", issue.src = "github"
+		MERGE (comment:Comment {id: i.id}) ON CREATE SET comment.author = i.user_data.login, comment.body = i.body, comment.src = "github"
                 MERGE (comment)-[:ON]->(issue)
                 MERGE (author:User {key: i.user_data.login}) ON CREATE SET author.name = i.user_data.login, author.displayName = i.user_data.name, author.emailAddress = i.user_data.email, author.organization = i.user_data.company, author.ignore = CASE i.user_data.ignoreUser WHEN "true" THEN true ELSE false END
                 MERGE (author)-[:CREATED]->(comment)
 
                 FOREACH (comm IN i.comments_data |
-                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.user_data.login, comment.body = comm.body
+                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.user_data.login, comment.body = comm.body, comment.src = "github"
                     MERGE (comment)-[:ON]->(issue)
                     MERGE (author:User {key: comm.user_data.login}) ON CREATE SET author.name = comm.user_data.login, author.displayName = comm.user_data.name, author.emailAddress = comm.user_data.email, author.organization = comm.user_data.company, author.ignore = CASE comm.user_data.ignoreUser WHEN "true" THEN true ELSE false END
                     MERGE (author)-[:CREATED]->(comment)
                 )
                 """
     elif type is "gerrit":
+        for item in jsonData['items']:
+            for comm in item['comments']:
+                if "username" not in comm['author']:
+                    comm['author']['username'] = comm['author']['email'].split("@")[0]
         query = """
                 WITH {json} as data
                 UNWIND data.items as i
                 MERGE (issue:Issue {id:i.id}) ON CREATE
-                  SET issue.key = i.key, issue.type = i.fields.issuetype.name, issue.resolutionDate = i.fields.resolutiondate, issue.updateDate = i.fields.updated, issue.createDate = i.fields.created, issue.priority = i.fields.priority.name
-                FOREACH (comm IN i.fields.comment.comments |
-                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.key, comment.body = comm.body
+                  SET issue.key = i.subject, issue.type = i.status, issue.resolutionDate = i.resolutiondate, issue.updateDate = i.updated, issue.createDate = i.created, issue.priority = i.priority, issue.src = "gerrit"
+                FOREACH (comm IN i.comments |
+                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.username, comment.body = comm.message, comment.vote = comm.vote, comment.src = "gerrit"
                     MERGE (comment)-[:ON]->(issue)
-                    MERGE (author:User {key: comm.author.key}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.displayName, author.emailAddress = comm.author.emailAddress, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
+                    MERGE (author:User {key: comm.author.username}) ON CREATE SET author.name = comm.author.username, author.displayName = comm.author.name, author.emailAddress = comm.author.email, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
                     MERGE (author)-[:CREATED]->(comment)
                 )
                 """
+    elif type is "email":
+        for item in jsonData['items']:
+            item['id'] = item['Message-ID']
+            if item['Subject'].startswith("Re: "):
+                item['Subject'] = item['Subject'][4:]
+#            if 'Name' not in item:
+#                item['Name'] = item['From'].split("<",1)[0]
+#            if 'Email' not in item:
+#                item['Email'] = item['From'].split("<",1)[1][:-1]
+
+        query = """
+                WITH {json} as data
+                UNWIND data.items as i
+                MERGE (issue:Issue {id:i.Subject}) ON CREATE
+                  SET issue.key = i.Subject, issue.type = "Message", issue.resolutionDate = "2018-01-01T00:00:00.000+0000", issue.updateDate = "2018-01-01T00:00:00.000+0000", issue.createDate = "2018-01-01T00:00:00.000+0000", issue.priority = i.priority, issue.src = "email"
+                MERGE (comment:Comment {id: i.id}) ON CREATE SET comment.author = i.From, comment.body = i.body.plain, comment.src = "email"
+                MERGE (comment)-[:ON]->(issue)
+                MERGE (author:User {key: i.From}) ON CREATE SET author.name = i.From, author.displayName= i.From, author.emailAddress = i.From, author.organization = i.organization, author.ignore = CASE i.ignoreUser WHEN "true" THEN true ELSE false END
+                MERGE (author)-[:CREATED]->(comment)
+                """
 
     # Send Cypher query.
-    graph.run(query, parameters={"json": json.loads(jsonData)})
+    graph.run(query, parameters={"json": jsonData})
 
     # Add defaults values for null fields
     query = """MATCH (n:User) RETURN n.key AS key, n.emailAddress AS emailAddress, n.organization AS organization, n.displayName AS displayName"""
@@ -151,6 +181,7 @@ def populateNeoDb(graph, jsonData, type):
                 organization = defaultOrg[index]
             if displayName is None:
                 displayName = key
+            displayName = displayName.replace("'", "")
             query = "MATCH (n:User) WHERE n.key = '" + key + "' SET n.emailAddress = '" + emailAddress + "', n.organization = '" + organization + "', n.displayName = '" + displayName + "'"
             graph.run(query)
 
@@ -187,6 +218,27 @@ def setOrgs(graph, orgData, fileName):
                 else:
                     comment["user_data"].pop("company", None)
                     comment["user_data"]["ignoreUser"] = "true"
+    elif "hostname" in fileName:
+        for item in jsonData["items"]:
+            for comment in item["comments"]:
+                byteKey = bytes(comment["author"]['email'].split("@")[0], "UTF-8")
+                if "username" in comment["author"]:
+                    byteKey = bytes(comment["author"]["username"], "UTF-8")
+                if byteKey in orgData.keys():
+                    comment["author"]["organization"] = str(orgData[byteKey][0], "UTF-8")
+                    comment["author"]["ignoreUser"] = "false"
+                else:
+                    comment["author"].pop("organization", None)
+                    comment["author"]["ignoreUser"] = "true"
+    elif "uri" in fileName:
+        for item in jsonData["items"]:
+            byteKey = bytes(item["From"], "UTF-8")
+            if byteKey in orgData.keys():
+                item["organization"] = str(orgData[byteKey][0], "UTF-8")
+                item["ignoreUser"] = "false"
+            else:
+                item.pop("organization", None)
+                item["ignoreUser"] = "true"
 
     if os.path.exists(path):
         os.remove(path)
@@ -205,18 +257,24 @@ def setOrgs(graph, orgData, fileName):
     graph.run(query, {"userKeys" : usersStrings})
 
 
-def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = []):
+def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = [], voteThreshold = None):
     params = {}
     # Nbr of comments per user and issue
     # author | issueId | anchor | nbrOfComments
-    query = """MATCH (n:Comment)-[r:ON]->(i:Issue) """
+    query = """MATCH (n:Comment)-[r:ON]->(i:Issue)"""
 
-    query = query + """ WHERE i.type IN {issueTypes} """
+    query = query + """ WHERE i.type IN {issueTypes}"""
     params['issueTypes'] = issueTypes
 
     if(len(priorities) > 0):
         query = query + """ AND i.priority IN {priorities} """
         params['priorities'] = priorities
+
+    if(voteThreshold is not None):
+        if (voteThreshold > 0):
+            query = query + """ AND n.vote > 0 """
+        elif (voteThreshold < 0):
+            query = query + """ AND n.vote < 0 """
 
     if(creationFromDate is not None):
         query = query + """ AND i.createDate >= {creationFromDate} """
@@ -304,7 +362,6 @@ def calcWeights(issueData):
                                 "weight": "label"}, inplace=True)
 
     edges.to_json("Data/calculated.json", "records")
-
     return issueData
 
 def genNetwork(issueData):
@@ -318,7 +375,6 @@ def genNetwork(issueData):
     degree = nx.degree_centrality(netw)
     betweeness = nx.betweenness_centrality(netw, weight="weight")
     closeness = nx.closeness_centrality(netw, distance="weight")
-#    eigenvector = nx.eigenvector_centrality_numpy(netw)
     try:
         eigenvector = nx.eigenvector_centrality(netw)
     except:
@@ -353,17 +409,22 @@ def genNetwork(issueData):
                                                     3: "eigenvector"})
 
     centralityData.to_json("Data/calculated_metrics.json", "records")
-
     return centralityData
 
-def getEdgeData(graph, issueTypes, org1, org2, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = []):
+def getEdgeData(graph, issueTypes, org1, org2, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = [], voteThreshold = None):
     params = {}
     # Nbr of comments per user and issue
     # author | issueId | anchor | nbrOfComments
     query = """MATCH (n:User)-[r1:CREATED]->(c:Comment)-[r2:ON]->(i:Issue) """
 
-    query = query + """ WHERE i.type IN {issueTypes} """
+    query = query + """ WHERE i.type IN {issueTypes}"""
     params['issueTypes'] = issueTypes
+
+    if(voteThreshold is not None):
+        if (voteThreshold > 0):
+            query = query + """ AND c.vote > 0 """
+        elif (voteThreshold < 0):
+            query = query + """ AND c.vote < 0 """
 
     query = query + """ AND n.organization = {org1} """
     params['org1'] = org1
@@ -435,8 +496,10 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 fileName = scrapeDataToNeo(graph, url=urllib.parse.unquote(splitPath[1]), project=urllib.parse.unquote(parsedQuery['project'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             elif ('owner' in keys and 'repository' in keys and 'api_token' in keys):
                 fileName = scrapeDataToNeo(graph, owner=urllib.parse.unquote(parsedQuery['owner'][0]), repository=urllib.parse.unquote(parsedQuery['repository'][0]), api_token=urllib.parse.unquote(parsedQuery['api_token'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
-            elif 'hostname' in keys and 'user' in keys:
-                filename = scrapeDataToNeo(graph, hostname=urllib.parse.unquote(parsedQuery['hostname'][0]), user=urllib.parse.unquote(parsedQuery['user'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
+            elif 'hostname' in keys:
+                fileName = scrapeDataToNeo(graph, hostname=urllib.parse.unquote(parsedQuery['hostname'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
+            elif 'uri' in keys and 'directory' in keys:
+                fileName = scrapeDataToNeo(graph, uri=urllib.parse.unquote(parsedQuery['uri'][0]), dir=urllib.parse.unquote(parsedQuery['directory'][0]), fromDateTime=datetime.strptime(urllib.parse.unquote(parsedQuery['fromDate'][0]), '%m/%d/%Y'))
             self.send_response(200)
             self.send_header('Access-Control-Allow-Credentials', 'true')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -474,15 +537,16 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     resolutionToDate = parsedQuery['resolutionToDate'][0] if 'resolutionToDate' in keys else None
                     unresolved = parsedQuery['unResolved'][0] if 'unResolved' in keys else None
                     priorities = parsedQuery['priorities'][0].split() if 'priorities' in keys else []
+                    sentiment = int(parsedQuery['sentiment'][0]) if 'sentiment' in keys else None
                     org1 = parsedQuery['org1'][0] if 'org1' in keys else None
                     org2 = parsedQuery['org2'][0] if 'org2' in keys else None
 
                     try:
-                        res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities)
+                        res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities, sentiment)
                         res = calcWeights(res)
                         res = genNetwork(res)
                         if (org1 is not None and org2 is not None):
-                            res2 = getEdgeData(graph, issueTypes, org1, org2, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities)
+                            res2 = getEdgeData(graph, issueTypes, org1, org2, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities, sentiment)
                     except (ZeroDivisionError, KeyError) as e:
                         self.send_header('Access-Control-Allow-Credentials', 'true')
                         self.send_header('Access-Control-Allow-Origin', '*')
@@ -538,7 +602,8 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         elif b'owner' in fileNameParams and b'repository' in fileNameParams:
             fileName = fileName + "&owner=" + str(fileNameParams[b'owner'][0], "UTF-8") + "&repository=" + str(fileNameParams[b'repository'][0], "UTF-8")
         elif b'hostname' in fileNameParams:
-            fileName = fileName + "&hostname=" + str(fileNameParams[b'hostname'][0], "UTF-8")
+            fileNameParams[b'hostname'][0] = urllib.parse.quote(fileNameParams[b'hostname'][0], safe="")
+            fileName = fileName + "&hostname=" + fileNameParams[b'hostname'][0]
         return "Data/Stored/" + fileName
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

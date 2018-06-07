@@ -7,21 +7,47 @@
   <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" type="text/css" />
   <link rel="stylesheet" href="http://visjs.org/dist/vis.css" type="text/css" />
   <style type="text/css">
+    #dataInfo {
+        margin-left: 2%;
+        margin-right: 2%;
+    }
     #mynetwork {
-        width: 49%;
+        width: 48%;
+        margin-left: 1%;
+        margin-right: 2%;
         height: 650px;
         border: 1px solid lightgray;
         float: left;
     }
     #extraInfoContainer {
-        width: 49%;
+        width: 48%;
+        margin-left: 2%;
         height: 650px;
         border: 1px solid lightgray;
         display: block;
         overflow-x: auto;
     }
+    #dataInfoContainer {
+        width: 32%;
+        margin: 1%;
+        margin-right: 2%;
+        margin-top: 2%;
+        border: 1px solid lightgray;
+        float: left;
+    }
     #filterContainer {
-        width: 98%;
+        width: 64%;
+        margin: 1%;
+        margin-left: 2%;
+        margin-top: 2%;
+        border: 1px solid lightgray;
+        display: block;
+        overflow-x: auto;
+    }
+    .filter {
+        margin: 5px;
+        margin-bottom: 0;
+        border: none;
     }
     #metricsTable {
         height: 100%;
@@ -79,7 +105,7 @@
     #navBar {
         width: 98%;
         list-style-type: none;
-        margin: 0;
+        margin: 1%;
         padding: 0;
         overflow: hidden;
         border: 1px solid #e7e7e7;
@@ -120,9 +146,6 @@
     .issueTypeFilter {
         margin: 10px;
         margin-left: 0;
-    }
-    .timeFilter {
-        display: inline-block;
     }
     .filterHeader {
         margin-top: 10px;
@@ -165,7 +188,6 @@
     <li id="newSource">Select New Source</li>
     <li id="editUserOrgs">Edit User Organizations</li>
 </ul>
-<p>Current Data File: <span id="dataName"></span></p>
 <div id="mynetwork"></div>
 <div id="extraInfoContainer">
     <h1 style="display:none;"></h1>
@@ -176,17 +198,24 @@
     <table id="metricsTable"></table>
     <table id="edgeTable"></table>
 </div>
+<div id="dataInfoContainer">
+    <p id="dataInfo">Current Data File: <span id="dataName"></span></p>
+</div>
 <div id="filterContainer">
-    <h2 class="filterHeader">Time Filter: </h2>
-    <fieldset class="timeFilter">
-        <legend>Issue Creation Dates: </legend>
+    <ul id="navBar" style="width:auto;margin:0px;">
+        <li id="issueTypes" style="background-color:#ddd">Issue Types</li>
+        <li id="sentiment">Sentiment</li>
+        <li id="priority">Priority</li>
+        <li id="creationDate">Creation Dates</li>
+        <li id="resolvedDate">Resolution Dates</li>
+    </ul>
+    <fieldset id="creationFieldset" style="display:none;" class="filter">
         <label for="creationFrom" title="Inclusive">From: </label>
         <input type="text" id="creationFrom" name="from">
         <label for="creationTo" title="Exclusive">To: </label>
         <input type="text" id="creationTo" name="to">
     </fieldset>
-    <fieldset class="timeFilter">
-        <legend>Issue Resolved Dates: </legend>
+    <fieldset id="resolutionFieldset" style="display:none;" class="filter">
         <label for="resolutionFrom" title="Inclusive">From: </label>
         <input type="text" id="resolutionFrom" name="from">
         <label for="resolutionTo" title="Exclusive">To: </label>
@@ -194,13 +223,14 @@
         <label for="notResolved">Not Resolved</label>
         <input type="checkbox" name="notResolved" id="notResolved" class="checkboxradio">
     </fieldset>
-    <h2 class="filterHeader">Issue Type Filter: </h2>
-    <fieldset id="issueTypeFieldset">
-      <legend>Select Issue Types: </legend>
+    <fieldset id="issueTypeFieldset" class="filter">
     </fieldset>
-    <h2 class="filterHeader">Priority Filter: </h2>
-    <fieldset id="prioritiesFieldset">
-      <legend>Select Priorities: </legend>
+    <fieldset id="prioritiesFieldset" style="display:none;" class="filter">
+    </fieldset>
+    <fieldset id="sentimentFieldset" style="display:none;" class="filter">
+        <label for="neutral">All Reviews</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="neutral">
+        <label for="positive">Positive Reviews</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="positive">
+        <label for="negative">Negative Reviews</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="negative">
     </fieldset>
 </div>
 
@@ -213,6 +243,7 @@
     <input id="selectJIRA" class="ui-button ui-widget ui-corner-all" value="JIRA">
     <input id="selectGitHub" class="ui-button ui-widget ui-corner-all" value="GitHub">
     <input id="selectGerrit" class="ui-button ui-widget ui-corner-all" value="Gerrit"> 
+    <input id="selectEmail" class="ui-button ui-widget ui-corner-all" value="Mailing List">
 </div>
 
 <div id="jiraUrlDialog" class="dialog" style="display:none;" title="JIRA URL">
@@ -262,12 +293,26 @@
     <input name="gerritHostname" id="gerritHostnameEntry"/>
     </div>
     <div>
-    <label for="gerritUserEntry">Enter your username:</label>
-    <input name="gerritUser" id="gerritUserEntry"/>
+    <label for="gerritFromDateEntry">Enter a From Date (based on change updated date):</label>
+    <input type="text" id="gerritFromDateEntry" name="gerritFromDate">
+    </div>
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
+  </form>
+</div>
+
+<div id="emailDialog" class="dialog" style="display:none;" title="Email">
+  <form>
+    <div>
+    <label for="emailURI">Enter the mailing list URI:</label>
+    <input name="emailURI" id="emailURIEntry"/>
     </div>
     <div>
-    <label for="gerritFromDateEntry">Enter a From Date (based on issue updated date):</label>
-    <input type="text" id="gerritFromDateEntry" name="gerritFromDate">
+    <label for="emailDir">Enter directory of Mbox files:</label>
+    <input name="emailDir" id="emailDirEntry"/>
+    </div>
+    <div>
+    <label for="emailFromDateEntry">Enter a From Date (based on email sent date):</label>
+    <input type="text" id="emailFromDateEntry" name="emailFromDate">
     </div>
     <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
   </form>
@@ -430,7 +475,7 @@
                         var fromDate = $( "#gerritFromDateEntry" ).val();
 
                         //Send Sir Perceval on a quest
-                        $.get("http://localhost:8080/quest/?hostname=" + encodeURIComponent(hostname) + "&user=" + encodeURIComponent(user) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                        $.get("http://localhost:8080/quest/?hostname=" + encodeURIComponent(hostname) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
                             setupApp(data);
                             var splitInfo = parseDecodedQuery(decodeURIComponent(data));
                             $("#dataName").text(splitInfo["hostname"] + " scraped on " + splitInfo["created"] + " from " + splitInfo["from"]);
@@ -440,6 +485,34 @@
                 });
 
                 $( "#gerritDialog.dialog" ).dialog({
+                    modal: true
+                });
+            });
+
+            $( "#dataTypeSelection #selectEmail").click(function(event, ui) {
+                $( "#dataTypeSelection" ).dialog("close");
+
+                $( "#emailDialog>form" )
+                    .on("submit", function(event, ui) {
+                        event.preventDefault();
+
+                        $("#emailDialog .loader").css("display", "");
+
+                        var uri = $( "#emailURIEntry" ).val();
+                        var dir = $( "#emailDirEntry" ).val();
+                        var fromDate = $( "#emailFromDateEntry" ).val();
+
+                        //Send Sir Perceval on a quest
+                        $.get("http://localhost:8080/quest/?uri=" + encodeURIComponent(uri) + "&directory=" + encodeURIComponent(dir) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                            setupApp(data);
+                            var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                            $("#dataName").text(splitInfo["uri"] + " scraped from " + splitInfo["directory"] + " from " + splitInfo["from"]);
+                            $("#emailDialog .loader").css("display", "none");
+                            $(event.currentTarget).parents(".dialog").dialog("close");
+                        });
+                });
+
+                $( "#emailDialog.dialog" ).dialog({
                     modal: true
                 });
             });
@@ -465,7 +538,10 @@
         
         $( "#gerritFromDateEntry" ).datepicker({changeMonth: true,
                                         changeYear: true});
-                            
+
+        $( "#emailFromDateEntry" ).datepicker({changeMonth: true,
+                                        changeYear: true});                    
+
         $("input.checkboxradio").checkboxradio();
         $("#notResolved").checkboxradio("widget").css("height", "20px").css("padding-top", "0").css("padding-bottom", "0");
 
@@ -480,11 +556,11 @@
 
             for (file in data.files) {
                 var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
-                if (typeof splitInfo["owner"] === 'undefined' && typeof splitInfo["hostname"] === 'undefined') {
+                if ("project" in splitInfo && "url" in splitInfo) {
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
-                } else if (typeof splitInfo["url"] === 'undefined' && typeof splitInfo["hostname"] === 'undefined') {
+                } else if ("repository" in splitInfo && "owner" in splitInfo) {
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["owner"] + "</td><td>" + splitInfo["repository"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
-                } else if (typeof splitInfo["owner"] === 'undefined' && typeof splitInfo["url"] === 'undefined') {
+                } else if ("hostname" in splitInfo) {
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["hostname"] + "</td><td>NA</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
                 }
             }
@@ -513,9 +589,16 @@
         $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: function() {
                 setupApp(file);
 		var splitInfo = parseDecodedQuery(decodeURIComponent(file));
-                $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);  
+                if ("project" in splitInfo && "url" in splitInfo) {
+                    $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                } else if ("repository" in splitInfo && "owner" in splitInfo) {
+                    $("#dataName").text(splitInfo["repository"] + " scraped from " + splitInfo["owner"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                } else if ("hostname" in splitInfo) {
+                    $("#dataName").text(splitInfo["hostname"] + " scraped on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                }  
                 $( "#prevDataSetSelect" ).dialog("close");
-            }        });
+            }
+        });
     }
     
     function setupApp(file) {
@@ -524,7 +607,47 @@
         editUserOrgsModal();
         
         initializeNetwork();
+
+        $( "#filterContainer #navbar #creationDate").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #creationDate").css("background-color", "#ddd");
+            $("#filterContainer #creationFieldset").css("display", "");            
+        });                
         
+        $( "#filterContainer #navbar #resolvedDate").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #resolvedDate").css("background-color", "#ddd");
+            $("#filterContainer #resolutionFieldset").css("display", "");
+        });
+
+        $( "#filterContainer #navbar #issueTypes").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #issueTypes").css("background-color", "#ddd");
+            $("#filterContainer #issueTypeFieldset").css("display", "");
+        });
+
+        $( "#filterContainer #navbar #priority").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #priority").css("background-color", "#ddd");
+            $("#filterContainer #prioritiesFieldset").css("display", "");
+        });
+
+        $( "#filterContainer #navbar #sentiment").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #sentiment").css("background-color", "#ddd");
+            $("#filterContainer #sentimentFieldset").css("display", "");
+        });
+
+        $( "#sentimentFieldset input.checkboxradio" ).checkboxradio()
+          .change(function(){
+            resetData();
+        });
+
         //Get the available issue types
         $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
             $("#filterContainer #issueTypeFieldset").empty();
@@ -703,6 +826,17 @@
         
         return priorityString !== "" ? "&priorities=" + priorityString : priorityString;
     }
+
+    function getSentimentFilters() {
+        var sentimentVal = "";
+        if ($( "#filterContainer #sentimentFieldset #positive" ).is(":checked")) {
+            sentimentVal = "1";
+        } else if ($( "#filterContainer #sentimentFieldset #negative" ).is(":checked")) {
+            sentimentVal = "-1";
+        }
+
+        return sentimentVal !== "" ? "&sentiment=" + sentimentVal : sentimentVal;
+    }
     
     //Get the state of the date filters
     function getDateFilters() {
@@ -713,7 +847,7 @@
     
     //Get the state of all filters
     function getFilters() {
-        var filters = (getTypeFilters() + getPriorityFilters() + getDateFilters()).substring(1);//slice off excess '&'
+        var filters = (getTypeFilters() + getPriorityFilters() + getDateFilters() + getSentimentFilters()).substring(1);//slice off excess '&'
         return "?" + filters;
     }
     
@@ -743,6 +877,8 @@
             
             if(x.statusText === "error") {
                 $("#extraInfoContainer #errorHeader").css("display", "");
+                $("#extraInfoContainer #edgeTable").css("display", "none");
+                $("#extraInfoContainer h1").css("display","none");
             }else {
                 $("#extraInfoContainer #errorHeader").css("display", "none");
             }
@@ -925,9 +1061,7 @@
         //var parsed = vis.network.gephiParser.parseGephi(gephiJSON); 
 
         var tmpNodeIds = new Set();
-        parsedJson.forEach(function(e){
-            e.label = e.label.toString().substr(0,4);
-            
+        parsedJson.forEach(function(e){           
             tmpNodeIds.add(e.from);
             tmpNodeIds.add(e.to);
         });

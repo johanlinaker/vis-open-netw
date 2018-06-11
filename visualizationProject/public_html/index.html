@@ -123,6 +123,11 @@
         background-color: #ddd;
         cursor: pointer;
     }
+    #communitySelection input {
+        display: block;
+        position: relative;
+        margin: 5 auto;
+    }
     #sourceTypeSelection input {
         display: block;
         position: relative;
@@ -232,6 +237,11 @@
         <label for="positive">Positive Reviews</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="positive">
         <label for="negative">Negative Reviews</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="negative">
     </fieldset>
+</div>
+
+<div id="communitySelection" class="dialog" style="display:none;" title="Community Selection">
+    <input id="newCommunity" class="ui-button ui-widget ui-corner-all" value="New Community">
+    <input id="addToCommunity" class="ui-button ui-widget ui-corner-all" value="Add to Current Community">
 </div>
 
 <div id="sourceTypeSelection" class="dialog" title="Source Type Selection">
@@ -397,9 +407,26 @@
         tableIdColumn = desiredMetricColumns[0]; //Make "company" the first column
         
         $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
-        $("#navBar #newSource").on("click", selectJiraSourceModal);
+        $("#navBar #newSource").on("click", selectCommunityModal);
 
         selectJiraSourceModal();
+
+        $( "#communitySelection #newCommunity").click(function(event, ui) {
+            $( "#communitySelection" ).dialog("close");
+            $.ajax("http://localhost:8080/reset", {data: "", type: "POST", complete: function() {
+                    $( "#sourceTypeSelection.dialog" ).dialog({
+                        modal: true
+                    });
+                }
+            });
+        });
+
+        $( "#communitySelection #addToCommunity").click(function(event, ui) {
+            $( "#communitySelection" ).dialog("close");
+            $( "#sourceTypeSelection.dialog" ).dialog({
+                modal: true
+            });
+        });
        
         $( "#sourceTypeSelection #newDataScrape").click(function(event, ui) {
             $( "#sourceTypeSelection" ).dialog("close");
@@ -803,8 +830,20 @@
             }).css("max-height", ($(window).height() * 0.9) + "px");
         });
     }
-    
+
+    function selectCommunityModal() {
+        $( "#communitySelection.dialog" ).dialog({
+            modal: true
+        });
+    }
+
     function selectJiraSourceModal() {
+        $.ajax("http://localhost:8080/reset", {data: "", type: "POST", complete: function() {
+                $( "#sourceTypeSelection.dialog" ).dialog({
+                    modal: true
+                });
+            }
+        });
         $( "#sourceTypeSelection.dialog" ).dialog({
             modal: true
         });

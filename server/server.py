@@ -32,6 +32,10 @@ def cleanDataDir():
         except Exception as e:
             print(e)
 
+def clearGraph(graph):
+    graph.delete_all()
+    graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
+
 def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, api_token=None, hostname=None, uri=None, dir=None, fromDateTime=None):
     perceval = None
     type = None
@@ -89,8 +93,8 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
 def populateNeoDb(graph, jsonData, type):
     cleanDataDir()
 
-    graph.delete_all()
-    graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
+#    graph.delete_all()
+#    graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
     jsonData = json.loads(jsonData)
 
     # Build query - This is JIRA-backend-specific
@@ -595,6 +599,9 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     populateNeoDb(graph, file.read(), "email")
         elif(splitPath[0] == "deleteData"):
             os.remove(self.getFilePathFromPostData())
+        elif(splitPath[0] == "reset"):
+            print("reset")
+            clearGraph(graph)
 
     def getFilePathFromPostData(self):
         fileNameParams = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))

@@ -562,6 +562,8 @@
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["owner"] + "</td><td>" + splitInfo["repository"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
                 } else if ("hostname" in splitInfo) {
                     $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["hostname"] + "</td><td>NA</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                } else if ("uri" in splitInfo) {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["uri"] + "</td><td>" + splitInfo["directory"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
                 }
             }
 
@@ -595,7 +597,9 @@
                     $("#dataName").text(splitInfo["repository"] + " scraped from " + splitInfo["owner"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
                 } else if ("hostname" in splitInfo) {
                     $("#dataName").text(splitInfo["hostname"] + " scraped on " + splitInfo["created"] + " from " + splitInfo["from"]);
-                }  
+                } else if ("uri" in splitInfo) {
+                    $("#dataName").text(splitInfo["uri"] + " scraped from " + splitInfo["directory"] + " from " + splitInfo["from"]);
+                }
                 $( "#prevDataSetSelect" ).dialog("close");
             }
         });

@@ -59,7 +59,10 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
             buf += ','
         first = False
         buf += json.dumps(issue['data'])
+        print(issue['data']['From'])
     buf += ']\n}'
+    buf = buf.replace("<", "(")
+    buf = buf.replace(">", ")")
 
     # Save buffered data for later usage
     filename = "created=" + datetime.utcnow().strftime("%d-%m-%Y") + "&from=" + fromDateTime.strftime(
@@ -194,26 +197,26 @@ def setOrgs(graph, orgData, fileName):
     if "url" in fileName and "project" in fileName:
         for item in jsonData["items"]:
             for comment in item["fields"]["comment"]["comments"]:
-                byteKey = bytes(comment["author"]["key"], "UTF-8")
-                if byteKey in orgData.keys():
-                    comment["author"]["organization"] = str(orgData[byteKey][0], "UTF-8")
+                key = comment["author"]["key"]
+                if key in orgData.keys():
+                    comment["author"]["organization"] = orgData[key][0]
                     comment["author"]["ignoreUser"] = "false"
                 else:
                     comment["author"].pop("organization", None)
                     comment["author"]["ignoreUser"] = "true"
     elif "owner" in fileName and "repository" in fileName:
         for item in jsonData["items"]:
-            byteKey = bytes(item["user_data"]["login"], "UTF-8")
-            if byteKey in orgData.keys():
-                item["user_data"]["company"] = str(orgData[byteKey][0], "UTF-8")
+            key = item["user_data"]["login"]
+            if key in orgData.keys():
+                item["user_data"]["company"] = orgData[key][0]
                 item["user_data"]["ignoreUser"] = "false"
             else:
                 item["user_data"].pop("company", None)
                 item["user_data"]["ignoreUser"] = "true"
             for comment in item["comments_data"]:
-                byteKey = bytes(comment["user_data"]["login"], "UTF-8")
-                if byteKey in orgData.keys():
-                    comment["user_data"]["company"] = str(orgData[byteKey][0], "UTF-8")
+                key = comment["user_data"]["login"]
+                if key in orgData.keys():
+                    comment["user_data"]["company"] = orgData[key][0]
                     comment["user_data"]["ignoreUser"] = "false"
                 else:
                     comment["user_data"].pop("company", None)
@@ -221,20 +224,20 @@ def setOrgs(graph, orgData, fileName):
     elif "hostname" in fileName:
         for item in jsonData["items"]:
             for comment in item["comments"]:
-                byteKey = bytes(comment["author"]['email'].split("@")[0], "UTF-8")
+                key = comment["author"]['email'].split("@")[0]
                 if "username" in comment["author"]:
-                    byteKey = bytes(comment["author"]["username"], "UTF-8")
-                if byteKey in orgData.keys():
-                    comment["author"]["organization"] = str(orgData[byteKey][0], "UTF-8")
+                    key = comment["author"]["username"]
+                if key in orgData.keys():
+                    comment["author"]["organization"] = orgData[key][0]
                     comment["author"]["ignoreUser"] = "false"
                 else:
                     comment["author"].pop("organization", None)
                     comment["author"]["ignoreUser"] = "true"
     elif "uri" in fileName:
         for item in jsonData["items"]:
-            byteKey = bytes(item["From"], "UTF-8")
-            if byteKey in orgData.keys():
-                item["organization"] = str(orgData[byteKey][0], "UTF-8")
+            key = item["From"]
+            if key in orgData.keys():
+                item["organization"] = orgData[key][0]
                 item["ignoreUser"] = "false"
             else:
                 item.pop("organization", None)
@@ -247,10 +250,10 @@ def setOrgs(graph, orgData, fileName):
 
     usersStrings = []
     for user in orgData:
-        userStr = user.decode("utf-8")
+        userStr = user
         usersStrings.append(userStr)
         query = "MATCH (n:User) WHERE n.key = {userKey} SET n.organization = {org}, n.ignore = false"
-        graph.run(query, {"userKey" : userStr, "org" : orgData[user][0].decode("utf-8")})
+        graph.run(query, {"userKey" : userStr, "org" : orgData[user][0]})
 
     query = "MATCH (n:User) WHERE NOT(n.key IN {userKeys}) SET n.organization = null, n.ignore = true"
 
@@ -526,7 +529,6 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             elif(splitPath[0] == "users"):
                 query = "MATCH (n:User) RETURN n.key AS username, n.displayName AS displayName, n.emailAddress AS emailAddress, n.organization AS organization, n.ignore AS ignore"
                 users = graph.run(query)
-
                 response = json.dumps(users.data())
             else:
                 if (len(keys) != 0 and 'issueTypes' in keys): # if there are no issueTypes then there is no response
@@ -578,7 +580,7 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         splitPath = parsedUrl.path.lstrip("/").split("/")
 
         if(splitPath[0] == "usersToOrgs"):
-            orgData = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
+            orgData = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))).decode('ascii'))
             setOrgs(graph, orgData, urllib.parse.unquote(parsedUrl.query).replace("fileName=", "", 1))
         elif(splitPath[0] == "load"):
             filename = self.getFilePathFromPostData()
@@ -589,6 +591,8 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                     populateNeoDb(graph, file.read(), "github")
                 elif "hostname" in filename:
                     populateNeoDb(graph, file.read(), "gerrit")
+                elif "uri" in filename:
+                    populateNeoDb(graph, file.read(), "email")
         elif(splitPath[0] == "deleteData"):
             os.remove(self.getFilePathFromPostData())
 
@@ -604,6 +608,9 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         elif b'hostname' in fileNameParams:
             fileNameParams[b'hostname'][0] = urllib.parse.quote(fileNameParams[b'hostname'][0], safe="")
             fileName = fileName + "&hostname=" + fileNameParams[b'hostname'][0]
+        elif b'uri' in fileNameParams:
+            fileNameParams[b'uri'][0] = urllib.parse.quote(fileNameParams[b'uri'][0], safe="")
+            fileName = fileName + "&uri=" + fileNameParams[b'uri'][0] + "&directory=" + str(fileNameParams[b'directory'][0], "UTF-8")
         return "Data/Stored/" + fileName
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):

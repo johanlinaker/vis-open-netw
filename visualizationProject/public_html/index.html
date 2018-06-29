@@ -1,29 +1,61 @@
 <html>
 <head>
+  <meta charset="utf-8"/>
   <script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
   <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
   <script src="http://visjs.org/dist/vis.js"></script>
   <link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css" type="text/css" />
   <link rel="stylesheet" href="http://visjs.org/dist/vis.css" type="text/css" />
   <style type="text/css">
+    #dataInfo {
+        margin-left: 2%;
+        margin-right: 2%;
+    }
     #mynetwork {
-        width: 49%;
+        width: 48%;
+        margin-left: 1%;
+        margin-right: 2%;
         height: 650px;
         border: 1px solid lightgray;
         float: left;
     }
     #extraInfoContainer {
-        width: 49%;
+        width: 48%;
+        margin-left: 2%;
         height: 650px;
         border: 1px solid lightgray;
         display: block;
         overflow-x: auto;
     }
+    #dataInfoContainer {
+        width: 32%;
+        margin: 1%;
+        margin-right: 2%;
+        margin-top: 2%;
+        border: 1px solid lightgray;
+        float: left;
+    }
     #filterContainer {
-        width: 98%;
+        width: 64%;
+        margin: 1%;
+        margin-left: 2%;
+        margin-top: 2%;
+        border: 1px solid lightgray;
+        display: block;
+        overflow-x: auto;
+    }
+    .filter {
+        margin: 5px;
+        margin-bottom: 0;
+        border: none;
     }
     #metricsTable {
         height: 100%;
+        display: block;
+        overflow-x: auto;
+    }
+    #edgeTable {
+        height: auto;
         display: block;
         overflow-x: auto;
     }
@@ -58,10 +90,44 @@
     #jiraUrlDialog input.ui-button {
         margin-top: 5px;
     }
+    #githubDialog div>input {
+        display: block;
+    }
+    #githubDialog input.ui-button {
+        margin-top: 5px;
+    }
+    #gerritDialog div>input {
+        display: block;
+    }
+    #gerritDialog input.ui-button {
+        margin-top: 5px;
+    }
+    #dataBar {
+        width: 98%;
+        list-style-type: none;
+        margin: 1%;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid #e7e7e7;
+        background-color: #f3f3f3;
+    }
+    #dataBar li {
+        display: inline;
+        color: #666;
+        text-align: center;
+        padding: 14px 16px;
+        text-decoration: none;
+        border-right: 2px;
+    }
+    #dataBar li:hover {
+        background-color: #ddd;
+        cursor: pointer;
+    }
+
     #navBar {
         width: 98%;
         list-style-type: none;
-        margin: 0;
+        margin: 1%;
         padding: 0;
         overflow: hidden;
         border: 1px solid #e7e7e7;
@@ -79,7 +145,17 @@
         background-color: #ddd;
         cursor: pointer;
     }
+    #communitySelection input {
+        display: block;
+        position: relative;
+        margin: 5 auto;
+    }
     #sourceTypeSelection input {
+        display: block;
+        position: relative;
+        margin: 5 auto;
+    }
+    #dataTypeSelection input {
         display: block;
         position: relative;
         margin: 5 auto;
@@ -97,9 +173,6 @@
     .issueTypeFilter {
         margin: 10px;
         margin-left: 0;
-    }
-    .timeFilter {
-        display: inline-block;
     }
     .filterHeader {
         margin-top: 10px;
@@ -139,7 +212,7 @@
 </head>
 <body>
 <ul id="navBar">
-    <li id="newJiraSource">Select New JIRA Source</li>
+    <li id="newSource">Select New Source</li>
     <li id="editUserOrgs">Edit User Organizations</li>
 </ul>
 <div id="mynetwork"></div>
@@ -150,18 +223,27 @@
         <h3>Try loosening the filters</h3>
     </div>
     <table id="metricsTable"></table>
+    <table id="edgeTable"></table>
+</div>
+<div id="dataInfoContainer">
+    <p id="dataInfo">Current Data File: <span id="dataName"></span></p>
 </div>
 <div id="filterContainer">
-    <h2 class="filterHeader">Time Filter: </h2>
-    <fieldset class="timeFilter">
-        <legend>Issue Creation Dates: </legend>
+    <ul id="navBar" style="width:auto;margin:0px;">
+        <li id="dataTypes" style="background-color:#ddd">Data Types</li>
+        <li id="issueTypes">Issue Types</li>
+        <li id="sentiment">Sentiment</li>
+        <li id="priority">Priority</li>
+        <li id="creationDate">Creation Dates</li>
+        <li id="resolvedDate">Resolution Dates</li>
+    </ul>
+    <fieldset id="creationFieldset" style="display:none;" class="filter">
         <label for="creationFrom" title="Inclusive">From: </label>
         <input type="text" id="creationFrom" name="from">
         <label for="creationTo" title="Exclusive">To: </label>
         <input type="text" id="creationTo" name="to">
     </fieldset>
-    <fieldset class="timeFilter">
-        <legend>Issue Resolved Dates: </legend>
+    <fieldset id="resolutionFieldset" style="display:none;" class="filter">
         <label for="resolutionFrom" title="Inclusive">From: </label>
         <input type="text" id="resolutionFrom" name="from">
         <label for="resolutionTo" title="Exclusive">To: </label>
@@ -169,19 +251,36 @@
         <label for="notResolved">Not Resolved</label>
         <input type="checkbox" name="notResolved" id="notResolved" class="checkboxradio">
     </fieldset>
-    <h2 class="filterHeader">Issue Type Filter: </h2>
-    <fieldset id="issueTypeFieldset">
-      <legend>Select Issue Types: </legend>
+    <fieldset id="dataTypeFieldset" class="filter">
     </fieldset>
-    <h2 class="filterHeader">Priority Filter: </h2>
-    <fieldset id="prioritiesFieldset">
-      <legend>Select Priorities: </legend>
+    <fieldset id="issueTypeFieldset" class="filter" style="display:none;">
     </fieldset>
+    <fieldset id="prioritiesFieldset" style="display:none;" class="filter">
+    </fieldset>
+    <fieldset id="sentimentFieldset" style="display:none;" class="filter">
+        <label for="neutral">All Reviews</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="neutral">
+        <label for="positiveVote">Positive Votes</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="positiveVote">
+        <label for="negativeVote">Negative Votes</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="negativeVote">
+        <label for="positiveSent">Positive Sentiment</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="positiveSent">
+        <label for="negativeSent">Negative Sentiment</label><input class="checkboxradio" type="radio" name="sentimentBtn" id="negativeSent">
+    </fieldset>
+</div>
+
+<div id="communitySelection" class="dialog" style="display:none;" title="Community Selection">
+    <input id="newCommunity" class="ui-button ui-widget ui-corner-all" value="New Community">
+    <input id="addToCommunity" class="ui-button ui-widget ui-corner-all" value="Add to Current Community">
 </div>
 
 <div id="sourceTypeSelection" class="dialog" title="Source Type Selection">
     <input id="newDataScrape" class="ui-button ui-widget ui-corner-all" value="New Data Scrape">
     <input id="loadPrevData" class="ui-button ui-widget ui-corner-all" value="Previously Scraped Data">
+</div>
+
+<div id="dataTypeSelection" class="dialog" style="display:none;" title="Data Type Selection">
+    <input id="selectJIRA" class="ui-button ui-widget ui-corner-all" value="JIRA">
+    <input id="selectGitHub" class="ui-button ui-widget ui-corner-all" value="GitHub">
+    <input id="selectGerrit" class="ui-button ui-widget ui-corner-all" value="Gerrit"> 
+    <input id="selectEmail" class="ui-button ui-widget ui-corner-all" value="Mailing List">
 </div>
 
 <div id="jiraUrlDialog" class="dialog" style="display:none;" title="JIRA URL">
@@ -202,6 +301,60 @@
   </form>
 </div>
 
+<div id="githubDialog" class="dialog" style="display:none;" title="GitHub">
+  <form>
+    <div>
+    <label for="githubOwnerEntry">Enter a GitHub Owner:</label>
+    <input name="githubOwner" id="githubOwnerEntry"/>
+    </div>
+    <div>
+    <label for="githubRepoEntry">Enter a Repository:</label>
+    <input name="githubRepo" id="githubRepoEntry"/>
+    </div>
+    <div>
+    <label for="githubTokenEntry">Enter a Access Token:</label>
+    <input name="githubToken" id="githubTokenEntry"/>
+    </div>
+    <div>
+    <label for="githubFromDateEntry">Enter a From Date (based on issue updated date):</label>
+    <input type="text" id="githubFromDateEntry" name="githubFromDate">
+    </div>
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
+  </form>
+</div>
+
+<div id="gerritDialog" class="dialog" style="display:none;" title="Gerrit">
+  <form>
+    <div>
+    <label for="gerritHostnameEntry">Enter a Gerrit hostname:</label>
+    <input name="gerritHostname" id="gerritHostnameEntry"/>
+    </div>
+    <div>
+    <label for="gerritFromDateEntry">Enter a From Date (based on change updated date):</label>
+    <input type="text" id="gerritFromDateEntry" name="gerritFromDate">
+    </div>
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
+  </form>
+</div>
+
+<div id="emailDialog" class="dialog" style="display:none;" title="Email">
+  <form>
+    <div>
+    <label for="emailURI">Enter the mailing list URI:</label>
+    <input name="emailURI" id="emailURIEntry"/>
+    </div>
+    <div>
+    <label for="emailDir">Enter directory of Mbox files:</label>
+    <input name="emailDir" id="emailDirEntry"/>
+    </div>
+    <div>
+    <label for="emailFromDateEntry">Enter a From Date (based on email sent date):</label>
+    <input type="text" id="emailFromDateEntry" name="emailFromDate">
+    </div>
+    <input class="ui-button ui-widget ui-corner-all" type="submit" value="Submit"> <div class="loader" style="display:none;"></div>
+  </form>
+</div>
+
 <div id="prevDataSetSelect" class="dialog" style="display:none;" title="Select a DataSet to Load">
     <table>
         <thead>
@@ -213,10 +366,10 @@
                     Data Creation Date (UTC)
                 </th>
                 <th>
-                    API URL
+                    API URL/Owner/Hostname
                 </th>
                 <th>
-                    Project
+                    Project/Repo
                 </th>
                 <th>
                     Scrape Date
@@ -228,7 +381,7 @@
     </table>
 </div>
 
-<div id='setOrganizations' class="dialog" style="display:none;" title="Set Organizations">
+<div id="setOrganizations" class="dialog" style="display:none;" title="Set Organizations">
     <form>
         <table id="setOrgTable">
             <thead>
@@ -246,6 +399,9 @@
                         Organization
                     </th>
                     <th>
+                        Merge with User
+                    </th>
+                    <th>
                         Ignore
                     </th>
                 </tr>
@@ -259,6 +415,7 @@
 </div>
 <script type="text/javascript">
     var desiredMetricColumns;
+    var desiredEdgeColumns;
     var tableIdColumn;
     var gephiImported;
     var container = document.getElementById('mynetwork');
@@ -271,40 +428,40 @@
     var threshold = 200;
     var dateFormat = "yy-mm-dd";
     var fileName;
-    
+
     initialize();
     
     function initialize() {
         desiredMetricColumns = ["company", "closeness", "eigenvector", "degree", "betweenness"]; //Only display these columns in the table
+        desiredEdgeColumns = ["author", "issueId", "issueComments", "numOfComments"];
         tableIdColumn = desiredMetricColumns[0]; //Make "company" the first column
         
         $("#navBar #editUserOrgs").on("click", editUserOrgsModal);
-        $("#navBar #newJiraSource").on("click", selectJiraSourceModal);
+        $("#navBar #newSource").on("click", selectCommunityModal);
 
         selectJiraSourceModal();
-        
+
+        $( "#communitySelection #newCommunity").click(function(event, ui) {
+            $( "#communitySelection" ).dialog("close");
+            $.ajax("http://localhost:8080/reset", {data: "", type: "POST", complete: function() {
+                    $( "#sourceTypeSelection.dialog" ).dialog({
+                        modal: true
+                    });
+                }
+            });
+        });
+
+        $( "#communitySelection #addToCommunity").click(function(event, ui) {
+            $( "#communitySelection" ).dialog("close");
+            $( "#sourceTypeSelection.dialog" ).dialog({
+                modal: true
+            });
+        });
+       
         $( "#sourceTypeSelection #newDataScrape").click(function(event, ui) {
             $( "#sourceTypeSelection" ).dialog("close");
             
-            $( "#jiraUrlDialog>form" )
-                .on("submit", function(event, ui) {
-                    event.preventDefault();
-            
-                    $("#jiraUrlDialog .loader").css("display", "");
-            
-                    var url = $( "#jiraUrlEntry" ).val();
-                    var project = $( "#jiraProjectEntry" ).val();
-                    var fromDate = $( "#jiraFromDateEntry" ).val();
-                    
-                    //Send Sir Perceval on a quest
-                    $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
-                        setupApp(data);
-                        
-                        $(event.currentTarget).parents(".dialog").dialog("close");
-                    });
-            });
-            
-            $( "#jiraUrlDialog.dialog" ).dialog({
+            $( "#dataTypeSelection.dialog" ).dialog({
                 modal: true
             });
         });
@@ -314,14 +471,137 @@
             
             populateDataSetSelectModal();
         });
+
+        $( "#dataTypeSelection #selectJIRA").click(function(event, ui) {
+            $( "#dataTypeSelection" ).dialog("close");
+
+            $( "#jiraUrlDialog>form" ).on("submit", function(event, ui) {
+                event.preventDefault();
+                $("#jiraUrlDialog .loader").css("display", "");
+            
+                var url = $( "#jiraUrlEntry" ).val();
+                var project = $( "#jiraProjectEntry" ).val();
+                var fromDate = $( "#jiraFromDateEntry" ).val();
+                    
+                //Send Sir Perceval on a quest
+                $.get("http://localhost:8080/quest/" + encodeURIComponent(url) + "?project=" + encodeURIComponent(project) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                    setupApp(data);
+   		    var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                    $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                    $("#jiraUrlDialog .loader").css("display", "none");
+                    $(event.currentTarget).parents(".dialog").dialog("close");
+                });
+            });
+            
+            $( "#jiraUrlDialog.dialog" ).dialog({
+                modal: true
+            });
+       });
+
+       $( "#dataTypeSelection #selectGitHub").click(function(event, ui) {
+            $( "#dataTypeSelection" ).dialog("close");
+
+            $( "#githubDialog>form" ).on("submit", function(event, ui) {
+                event.preventDefault();
+             
+                $("#githubDialog .loader").css("display", "");
+
+                var owner = $( "#githubOwnerEntry" ).val();
+                var repo = $( "#githubRepoEntry" ).val();
+                var token = $( "#githubTokenEntry" ).val();
+                var fromDate = $( "#githubFromDateEntry" ).val();
+
+                //Send Sir Perceval on a quest
+                $.get("http://localhost:8080/quest/?owner=" + encodeURIComponent(owner) + "&repository=" + encodeURIComponent(repo) + "&api_token=" + encodeURIComponent(token) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) { 
+                    setupApp(data);
+                    var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                    $("#dataName").text(splitInfo["repository"] + " scraped from " + splitInfo["owner"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                    $("#githubDialog .loader").css("display", "none");
+                    $(event.currentTarget).parents(".dialog").dialog("close");
+                });
+            });
+
+            $( "#githubDialog.dialog" ).dialog({
+                modal: true
+            });
+         });
+
+         $( "#dataTypeSelection #selectGerrit").click(function(event, ui) {
+            $( "#dataTypeSelection" ).dialog("close");
+
+            $( "#gerritDialog.dialog" ).dialog({
+                modal: true
+            });
+        });
+
+        $( "#gerritDialog>form" )
+            .on("submit", function(event, ui) {
+                event.preventDefault();
+                alert("Gerrit submitted");
+                $("#gerritDialog .loader").css("display", "");
+
+                var hostname = $( "#gerritHostnameEntry" ).val();
+                var user = $( "#gerritUserEntry" ).val();
+                var fromDate = $( "#gerritFromDateEntry" ).val();
+
+                //Send Sir Perceval on a quest
+                $.get("http://localhost:8080/quest/?hostname=" + encodeURIComponent(hostname) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                    alert("retrieving...");
+                    var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                    $("#dataName").text(splitInfo["hostname"] + " scraped on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                    $("#gerritDialog .loader").css("display", "none");
+                    $(event.currentTarget).parents(".dialog").dialog("close");
+                    setupApp(data);
+                    alert("Gerrit retrieved");
+                });
+        });
+
+        $( "#dataTypeSelection #selectEmail").click(function(event, ui) {
+            $( "#dataTypeSelection" ).dialog("close");
+
+            $( "#emailDialog>form" )
+                .on("submit", function(event, ui) {
+                    event.preventDefault();
+
+                    $("#emailDialog .loader").css("display", "");
+
+                    var uri = $( "#emailURIEntry" ).val();
+                    var dir = $( "#emailDirEntry" ).val();
+                    var fromDate = $( "#emailFromDateEntry" ).val();
+
+                    //Send Sir Perceval on a quest
+                    $.get("http://localhost:8080/quest/?uri=" + encodeURIComponent(uri) + "&directory=" + encodeURIComponent(dir) + "&fromDate=" + encodeURIComponent(fromDate), function(data, status, jqXHR) {
+                        setupApp(data);
+                        var splitInfo = parseDecodedQuery(decodeURIComponent(data));
+                        $("#dataName").text(splitInfo["uri"] + " scraped from " + splitInfo["directory"] + " from " + splitInfo["from"]);
+                        $("#emailDialog .loader").css("display", "none");
+                        $(event.currentTarget).parents(".dialog").dialog("close");
+                    });
+            });
+
+            $( "#emailDialog.dialog" ).dialog({
+                modal: true
+            });
+        });
         
         setupEventHandlers();
 
         $( "#jiraFromDateEntry" ).datepicker({changeMonth: true,
                                         changeYear: true});
-                                    
+
+        $( "#githubFromDateEntry" ).datepicker({changeMonth: true,
+                                        changeYear: true});
+        
+        $( "#gerritFromDateEntry" ).datepicker({changeMonth: true,
+                                        changeYear: true});
+
+        $( "#emailFromDateEntry" ).datepicker({changeMonth: true,
+                                        changeYear: true});                    
+
         $("input.checkboxradio").checkboxradio();
         $("#notResolved").checkboxradio("widget").css("height", "20px").css("padding-top", "0").css("padding-bottom", "0");
+
+        $("#edgeTable").css("display","none");
     }
     
     function populateDataSetSelectModal() {
@@ -332,7 +612,15 @@
 
             for (file in data.files) {
                 var splitInfo = parseDecodedQuery(decodeURIComponent(data.files[file]));
-                $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                if ("project" in splitInfo && "url" in splitInfo) {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["url"] + "</td><td>" + splitInfo["project"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                } else if ("repository" in splitInfo && "owner" in splitInfo) {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["owner"] + "</td><td>" + splitInfo["repository"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                } else if ("hostname" in splitInfo) {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["hostname"] + "</td><td>NA</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                } else if ("uri" in splitInfo) {
+                    $( "#prevDataSetSelect table tbody" ).append("<tr><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Delete\" onClick=\"deleteFile('" + data.files[file] + "');\"></td><td>" + splitInfo["created"] + "</td><td>" + splitInfo["uri"] + "</td><td>" + splitInfo["directory"] + "</td><td>" + splitInfo["from"] + "</td><td><input class=\"ui-button ui-widget ui-corner-all\"  value=\"Select\" onClick=\"loadFile('" + data.files[file] + "');\"></td></tr>");
+                }
             }
 
             $( "#prevDataSetSelect.dialog" ).dialog({
@@ -358,7 +646,16 @@
     function loadFile(file) {
         $.ajax("http://localhost:8080/load", {data: file, type: "POST", complete: function() {
                 setupApp(file);
-                
+		var splitInfo = parseDecodedQuery(decodeURIComponent(file));
+                if ("project" in splitInfo && "url" in splitInfo) {
+                    $("#dataName").text(splitInfo["project"] + " scraped from " + splitInfo["url"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                } else if ("repository" in splitInfo && "owner" in splitInfo) {
+                    $("#dataName").text(splitInfo["repository"] + " scraped from " + splitInfo["owner"] + " on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                } else if ("hostname" in splitInfo) {
+                    $("#dataName").text(splitInfo["hostname"] + " scraped on " + splitInfo["created"] + " from " + splitInfo["from"]);
+                } else if ("uri" in splitInfo) {
+                    $("#dataName").text(splitInfo["uri"] + " scraped from " + splitInfo["directory"] + " from " + splitInfo["from"]);
+                }
                 $( "#prevDataSetSelect" ).dialog("close");
             }
         });
@@ -366,15 +663,65 @@
     
     function setupApp(file) {
         fileName = file;
-        
+
         editUserOrgsModal();
         
         initializeNetwork();
         
+        $( "#filterContainer #navbar #dataTypes").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #dataTypes").css("background-color", "#ddd");
+            $("#filterContainer #dataTypeFieldset").css("display", "");            
+        });                
+
+        $( "#filterContainer #navbar #creationDate").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #creationDate").css("background-color", "#ddd");
+            $("#filterContainer #creationFieldset").css("display", "");            
+        });                
+        
+        $( "#filterContainer #navbar #resolvedDate").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #resolvedDate").css("background-color", "#ddd");
+            $("#filterContainer #resolutionFieldset").css("display", "");
+        });
+
+        $( "#filterContainer #navbar #issueTypes").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #issueTypes").css("background-color", "#ddd");
+            $("#filterContainer #issueTypeFieldset").css("display", "");
+        });
+
+        $( "#filterContainer #navbar #priority").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #priority").css("background-color", "#ddd");
+            $("#filterContainer #prioritiesFieldset").css("display", "");
+        });
+
+        $( "#filterContainer #navbar #sentiment").click(function(event, ui) {
+            $("#filterContainer .filter").css("display", "none");
+            $("#filterContainer #navbar li").css("background-color", "#f3f3f3");
+            $("#filterContainer #navbar #sentiment").css("background-color", "#ddd");
+            $("#filterContainer #sentimentFieldset").css("display", "");
+        });
+
+        setupFilters()
+    };
+    
+    function setupFilters() {
+        $( "#sentimentFieldset input.checkboxradio" ).checkboxradio()
+          .change(function(){
+            resetData();
+        });
+
         //Get the available issue types
         $.get("http://localhost:8080/issueTypes", function(data, status, jqXHR) {
             $("#filterContainer #issueTypeFieldset").empty();
-            
             $.each(data, function(index, issueType){
                 $("#filterContainer #issueTypeFieldset").append("<label for=" + issueType.type + ">" + issueType.type + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + issueType.type + " id=" + issueType.type + ">");
             });
@@ -383,11 +730,22 @@
                         resetData();
             });
         });
-        
+
+        $.get("http://localhost:8080/dataTypes", function(data, status, jqXHR) {
+            $("#filterContainer #dataTypeFieldset").empty();
+            $.each(data, function(index, dataType){
+                $("#filterContainer #dataTypeFieldset").append("<label for=" + dataType.src + ">" + dataType.src + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + dataType.src + " id=" + dataType.src + ">");
+            });
+            $( "#dataTypeFieldset input.checkboxradio" ).checkboxradio()
+                    .change(function(){
+                        resetData();
+            });
+        });
+
         //Get priorities
         $.get("http://localhost:8080/priorities", function(data, status, jqXHR) {
             $("#filterContainer #prioritiesFieldset").empty();
-            
+
             $.each(data, function(index, priority){
                 $("#filterContainer #prioritiesFieldset").append("<label for=" + priority.priority + ">" + priority.priority + "</label><input class=\"checkboxradio\" type=\"checkbox\" name=" + priority.priority + " id=" + priority.priority + ">");
             });
@@ -443,8 +801,8 @@
                     dateFormat: dateFormat
                 });
         });
-    };
-    
+    }
+
     function setupEventHandlers() {
         $( "#prevDataSetSelect table tbody" ).on("click", "tr td input", function(event, ui) {
             $(event.target).css("display", "none");
@@ -469,6 +827,22 @@
             $.ajax("http://localhost:8080/usersToOrgs?fileName=" + encodeURIComponent(fileName), {data: data, type: "POST", complete: function() {
                     $("#setOrganizations.dialog").dialog("close");
                     $("#setOrganizations .loader").css("display", "none");
+                    resetData();
+            }});
+
+            data = {};
+            $("#setOrgTable>tbody>tr").each(function() {
+                var key = $(this).find("td").first().html();
+                var value = $(this).find("input.merge").val();
+                data[key] = value;
+            });
+
+ 
+            //Merge redundant users
+            $.ajax("http://localhost:8080/merge", {data: data, type: "POST", complete: function() {
+                    $("#setOrganizations.dialog").dialog("close");
+                    $("#setOrganizations .loader").css("display", "none");
+                    resetData();
             }});
         });
 
@@ -511,7 +885,7 @@
             $("#setOrgTable>tbody tr").remove();
 
             $.each(data, function(index, user) {
-                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td>" + user.emailAddress + "</td><td><input class=\"organization\" value=\"" + user.organization + "\"/></td><td><input class=\"ignore\" type=\"checkbox\" name=\"Ignore\" value=\"Ignore\" " + (user.ignore  === true || user.ignore === "true" ? "checked" : "") + "></td></tr>");
+                $("#setOrgTable>tbody").append("<tr><td>" + user.username + "</td><td>" + user.displayName + "</td><td>" + user.emailAddress + "</td><td><input class=\"organization\" value=\"" + user.organization + "\"/></td><td><input class=\"merge\" value=\"\"/></td><td><input class=\"ignore\" type=\"checkbox\" name=\"Ignore\" value=\"Ignore\" " + (user.ignore  === true || user.ignore === "true" ? "checked" : "") + "></td></tr>");
             });
 
             $( "#setOrganizations.dialog" ).dialog({
@@ -521,8 +895,20 @@
             }).css("max-height", ($(window).height() * 0.9) + "px");
         });
     }
-    
+
+    function selectCommunityModal() {
+        $( "#communitySelection.dialog" ).dialog({
+            modal: true
+        });
+    }
+
     function selectJiraSourceModal() {
+        $.ajax("http://localhost:8080/reset", {data: "", type: "POST", complete: function() {
+                $( "#sourceTypeSelection.dialog" ).dialog({
+                    modal: true
+                });
+            }
+        });
         $( "#sourceTypeSelection.dialog" ).dialog({
             modal: true
         });
@@ -538,6 +924,17 @@
         
         return issueTypesString !== "" ? "&issueTypes=" + issueTypesString : issueTypesString;
     }
+
+    //Get the state of the issue type filters
+    function getDataFilters() {
+        var dataTypesString = "";
+        $.each($("#filterContainer #dataTypeFieldset input:checked"), function(index, dataTypeCheckbox){
+            dataTypesString = dataTypesString + dataTypeCheckbox.id + "+";
+        });
+        dataTypesString = dataTypesString.slice(0,-1);
+        
+        return dataTypesString !== "" ? "&dataTypes=" + dataTypesString : dataTypesString;
+    }
     
     function getPriorityFilters() {
         var priorityString = "";
@@ -547,6 +944,21 @@
         priorityString = priorityString.slice(0,-1);
         
         return priorityString !== "" ? "&priorities=" + priorityString : priorityString;
+    }
+
+    function getSentimentFilters() {
+        var sentimentVal = "";
+        if ($( "#filterContainer #sentimentFieldset #positiveVote" ).is(":checked")) {
+            return "&vote=1";
+        } else if ($( "#filterContainer #sentimentFieldset #negativeVote" ).is(":checked")) {
+            return "&vote=-1";
+        } else if ($( "#filterContainer #sentimentFieldset #positiveSent" ).is(":checked")) {
+            return "&sentiment=1";
+        } else if ($( "#filterContainer #sentimentFieldset #negativeSent" ).is(":checked")) {
+            return "&sentiment=-1";
+        }
+
+        return "";
     }
     
     //Get the state of the date filters
@@ -558,7 +970,7 @@
     
     //Get the state of all filters
     function getFilters() {
-        var filters = (getTypeFilters() + getPriorityFilters() + getDateFilters()).substring(1);//slice off excess '&'
+        var filters = (getTypeFilters() + getDataFilters() + getPriorityFilters() + getDateFilters() + getSentimentFilters()).substring(1);//slice off excess '&'
         return "?" + filters;
     }
     
@@ -588,6 +1000,8 @@
             
             if(x.statusText === "error") {
                 $("#extraInfoContainer #errorHeader").css("display", "");
+                $("#extraInfoContainer #edgeTable").css("display", "none");
+                $("#extraInfoContainer h1").css("display","none");
             }else {
                 $("#extraInfoContainer #errorHeader").css("display", "none");
             }
@@ -668,11 +1082,20 @@
     //Display the edge data in place of the table
     function displayEdgeData(selectionData) {
         if(selectionData.nodes.length === 0 && selectionData.edges.length === 1) {
+            table = document.getElementById("edgeTable");
+            while (table.firstChild) {
+                table.removeChild(table.firstChild);
+            }
+
             $("#metricsTable").css("display","none");
-            
+            $("#edgeTable").css("display","");            
+
             var edge = edges.get(selectionData.edges[0]);
             var header = $("#extraInfoContainer h1");
-            header.text(edge.from + " vs. " + edge.to);
+            header.text(edge.from + " > " + edge.to);
+            $.getJSON("http://localhost:8080/_edge" + getFilters() + "&org1=" + edge.from + "&org2=" + edge.to, function(data, status, jqXHR){
+		buildEdgeTable(JSON.parse(jqXHR.responseText));                
+            });
             header.css("display","");
         }
     }
@@ -713,6 +1136,35 @@
         }
     }
     
+    function buildEdgeTable(edgeJSON){
+        // EXTRACT VALUE FOR HTML HEADER.
+        var col = [];
+        for (var i = 0; i < edgeJSON.length; i++) {
+            for (var key in edgeJSON[i]) {
+                if (col.indexOf(key) === -1 && desiredEdgeColumns.indexOf(key) !== -1) {
+                    col.push(key);
+                }
+            }
+        }
+        // CREATE DYNAMIC TABLE.
+        var table = document.getElementById("edgeTable");
+        // CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
+        var tr = table.insertRow(-1);                   // TABLE ROW.
+        for (var i = 0; i < col.length; i++) {
+            var th = document.createElement("th");      // TABLE HEADER.
+            th.innerHTML = col[i];
+            tr.appendChild(th);
+        }
+        // ADD JSON DATA TO THE TABLE AS ROWS.
+        for (var i = 0; i < edgeJSON.length; i++) {
+            tr = table.insertRow(-1);
+            for (var j = 0; j < col.length; j++) {
+                var tabCell = tr.insertCell(-1);
+                tabCell.innerHTML = edgeJSON[i][col[j]];
+            }
+        }
+    }
+
     //Re-add removed nodes and edges to the graph
     var removedEdges = [];
     var removedNodes = [];
@@ -732,9 +1184,7 @@
         //var parsed = vis.network.gephiParser.parseGephi(gephiJSON); 
 
         var tmpNodeIds = new Set();
-        parsedJson.forEach(function(e){
-            e.label = e.label.toString().substr(0,4);
-            
+        parsedJson.forEach(function(e){           
             tmpNodeIds.add(e.from);
             tmpNodeIds.add(e.to);
         });
@@ -868,6 +1318,7 @@
     function resetExtraInfo(){
         $("#extraInfoContainer h1").css("display","none");
         $("#metricsTable").css("display","");
+        $("#edgeTable").css("display","none");
     }
     
     //Change to a hierarchal graph structure with the selected node being the top node

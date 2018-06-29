@@ -1,0 +1,8 @@
+rm converted_EMLs.mbox
+for sFile in "$@"
+do
+  echo "From - Thu Sep 5 08:43:40 2013" >> converted_EMLs.mbox
+  echo "Appending [$sFile]"
+  cat "$sFile" >> converted_EMLs.mbox
+done
+echo "Finished"

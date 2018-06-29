@@ -12,6 +12,10 @@ from perceval.backends.core import gerrit as percGerrit
 from perceval.backends.core import mbox as percMbox
 import gerritAPI as gerrit
 
+from SentiCR import SentiCR
+#from textblob import TextBlob
+#from textblob.classifiers import NaiveBayesClassifier
+
 import json
 import os
 
@@ -19,8 +23,16 @@ from datetime import datetime
 import urllib
 
 import py2neo
+from py2neo.packages.httpstream import http
 
+http.socket_timeout = 9999
 neo4jLoc = "http://neo4j:lund101@localhost:7474/db/data/"
+
+pd.options.mode.chained_assignment = None
+
+#with open("server/training_data.csv", "r") as fp:
+#    cl = NaiveBayesClassifier(fp, format = "csv")
+sentiment_analyzer=SentiCR.SentiCR()
 
 def cleanDataDir():
     folder = "Data"
@@ -63,7 +75,6 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
             buf += ','
         first = False
         buf += json.dumps(issue['data'])
-        print(issue['data']['From'])
     buf += ']\n}'
     buf = buf.replace("<", "(")
     buf = buf.replace(">", ")")
@@ -93,10 +104,8 @@ def scrapeDataToNeo(graph, url=None, project=None, owner=None, repository=None, 
 def populateNeoDb(graph, jsonData, type):
     cleanDataDir()
 
-#    graph.delete_all()
-#    graph.run("CREATE CONSTRAINT ON (u:User) ASSERT u.key IS UNIQUE;")
     jsonData = json.loads(jsonData)
-
+    
     # Build query - This is JIRA-backend-specific
     if type is "jira":
         query = """
@@ -131,31 +140,45 @@ def populateNeoDb(graph, jsonData, type):
                 )
                 """
     elif type is "gerrit":
+        print("fix data")
         for item in jsonData['items']:
+#            if "username" not in item['owner']:
+#                item['owner']['username'] = item['owner']['email'].split("@")[0]
             for comm in item['comments']:
-                if "username" not in comm['author']:
-                    comm['author']['username'] = comm['author']['email'].split("@")[0]
+                k = comm['message'] .rfind("\n>")
+                comm['sentiment'] = 2*sentiment_analyzer.get_sentiment_polarity(comm['message'][(k+2):])[0] + 1 
+#                if "username" not in comm['author']:
+#                    if "email" in comm['author']:
+#                        comm['author']['username'] = comm['author']['email'].split("@")[0]
+#                    else:
+#                        continue
+        print(jsonData['items'][0]['comments'][0]['sentiment'])
+        print("prepare query")
         query = """
                 WITH {json} as data
                 UNWIND data.items as i
                 MERGE (issue:Issue {id:i.id}) ON CREATE
-                  SET issue.key = i.subject, issue.type = i.status, issue.resolutionDate = i.resolutiondate, issue.updateDate = i.updated, issue.createDate = i.created, issue.priority = i.priority, issue.src = "gerrit"
+                  SET issue.key = i.subject, issue.type = i.status, issue.resolutionDate = i.resolutiondate, issue.updateDate = i.updated, issue.createDate = i.created, issue.priority = i.priority, issue.src = "gerrit", issue.owner = i.owner.username
                 FOREACH (comm IN i.comments |
-                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author.username, comment.body = comm.message, comment.vote = comm.vote, comment.src = "gerrit"
+                    MERGE (comment:Comment {id: comm.id}) ON CREATE SET comment.author = comm.author._account_id, comment.body = comm.message, comment.vote = comm.vote, comment.src = "gerrit", comment.sentiment = comm.sentiment
                     MERGE (comment)-[:ON]->(issue)
-                    MERGE (author:User {key: comm.author.username}) ON CREATE SET author.name = comm.author.username, author.displayName = comm.author.name, author.emailAddress = comm.author.email, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
+                    MERGE (author:User {key: comm.author._account_id}) ON CREATE SET author.name = comm.author.name, author.displayName = comm.author.name, author.emailAddress = comm.author.email, author.organization = comm.author.organization, author.ignore = CASE comm.author.ignoreUser WHEN "true" THEN true ELSE false END
                     MERGE (author)-[:CREATED]->(comment)
                 )
                 """
     elif type is "email":
+        print("fix data")
         for item in jsonData['items']:
+            if ('html' in item['body']):
+                item['body']['html'] = item['body']['html'].encode('utf-8', 'replace').decode('utf-8')
+            if ('plain' in item['body']):
+                item['body']['plain'] = item['body']['plain'].encode('utf-8', 'replace').decode('utf-8')
+            if item['Subject'] is None:
+                item['Subject'] = "Untitled"
+
             item['id'] = item['Message-ID']
-            if item['Subject'].startswith("Re: "):
+            if item['Subject'] is not None and item['Subject'].startswith("Re: "):
                 item['Subject'] = item['Subject'][4:]
-#            if 'Name' not in item:
-#                item['Name'] = item['From'].split("<",1)[0]
-#            if 'Email' not in item:
-#                item['Email'] = item['From'].split("<",1)[1][:-1]
 
         query = """
                 WITH {json} as data
@@ -167,13 +190,14 @@ def populateNeoDb(graph, jsonData, type):
                 MERGE (author:User {key: i.From}) ON CREATE SET author.name = i.From, author.displayName= i.From, author.emailAddress = i.From, author.organization = i.organization, author.ignore = CASE i.ignoreUser WHEN "true" THEN true ELSE false END
                 MERGE (author)-[:CREATED]->(comment)
                 """
-
+    print("add data")
     # Send Cypher query.
     graph.run(query, parameters={"json": jsonData})
 
     # Add defaults values for null fields
     query = """MATCH (n:User) RETURN n.key AS key, n.emailAddress AS emailAddress, n.organization AS organization, n.displayName AS displayName"""
 
+    print("Fix db data")
     userData = pd.DataFrame(graph.data(query))
     if len(userData.index) > 0:
         userData['emailAddress'] = userData['emailAddress'].replace({' at ': '@', ' dot ': '.'}, regex=True)
@@ -189,8 +213,11 @@ def populateNeoDb(graph, jsonData, type):
             if displayName is None:
                 displayName = key
             displayName = displayName.replace("'", "")
+            if not isinstance(key, str):
+                key = str(key)
             query = "MATCH (n:User) WHERE n.key = '" + key + "' SET n.emailAddress = '" + emailAddress + "', n.organization = '" + organization + "', n.displayName = '" + displayName + "'"
             graph.run(query)
+    print("done")
 
 # Set what organization the user is in according to data in orgData
 def setOrgs(graph, orgData, fileName):
@@ -264,7 +291,7 @@ def setOrgs(graph, orgData, fileName):
     graph.run(query, {"userKeys" : usersStrings})
 
 
-def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = [], voteThreshold = None):
+def readDB(graph, issueTypes, dataTypes, creationFromDate = None, creationToDate = None, resolutionFromDate = None, resolutionToDate = None, unresolved = True, priorities = [], voteThreshold = None, sentimentThres = None):
     params = {}
     # Nbr of comments per user and issue
     # author | issueId | anchor | nbrOfComments
@@ -277,11 +304,21 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
         query = query + """ AND i.priority IN {priorities} """
         params['priorities'] = priorities
 
+    if(len(dataTypes) > 0):
+        query = query + """ AND n.src IN {dataTypes} """
+        params['dataTypes'] = dataTypes
+
     if(voteThreshold is not None):
         if (voteThreshold > 0):
-            query = query + """ AND n.vote > 0 """
+            query = query + """ AND (n.vote > 0 OR n.src <> "gerrit") """
         elif (voteThreshold < 0):
-            query = query + """ AND n.vote < 0 """
+            query = query + """ AND (n.vote < 0 OR n.src <> "gerrit") """
+
+    if(sentimentThres is not None):
+        if (sentimentThres > 0):
+            query = query + """ AND (n.sentiment > 0 OR n.src <> "gerrit") """
+        elif (sentimentThres < 0):
+            query = query + """ AND (n.sentiment < 0 OR n.src <> "gerrit") """
 
     if(creationFromDate is not None):
         query = query + """ AND i.createDate >= {creationFromDate} """
@@ -346,26 +383,34 @@ def readDB(graph, issueTypes, creationFromDate = None, creationToDate = None, re
 
     return issueData
 
-def calcWeights(issueData):
-
+def calcWeights(issueData, graph):
+#    query = """MATCH (i:Issue) WHERE i.src = "gerrit" RETURN i.id as issueId, i.owner as owner"""
+#    owners = pd.DataFrame(graph.data(query))
+#    query = """MATCH (n:User) RETURN n.key as owner, n.organization as toOrg"""
+#    ownerOrgs = pd.DataFrame(graph.data(query))
+#    issueData = pd.merge(issueData, owners, how="left", on="issueId")
+#    issueData = pd.merge(issueData, ownerOrgs, how="left", on="owner")
     # Add collaborators and merge on common issueId
     collaborators = pd.DataFrame({'issueId': issueData['issueId'],
-                                 'collabOrganization': issueData['organization']})
+                                 'toOrg': issueData['organization']})
 
     issueData = pd.merge(issueData, collaborators, how="outer", on="issueId")
     issueData = issueData.drop('issueId', axis=1)
 
+#    issueData['toOrg'] = issueData['toOrg'].fillna(issueData['owner'])
+#    issueData['toOrg'] = issueData['toOrg'].fillna(issueData['collabOrganization'])
+#    issueData = issueData.drop('owner', axis=1)
+#    issueData = issueData.drop('collabOrganization', axis=1)
     # Aggregate over general organizational collaboration instead of per issue
     issueData = issueData.groupby(['organization',
-                                   'collabOrganization']).sum().reset_index()
-
+                                   'toOrg']).sum().reset_index()
     issueData['weight'] = issueData['nbrOfComments'] / issueData['totNbrOfComments']
 
     issueData['weight'] = issueData['weight'].fillna(0)
 
     edges = issueData.copy()
     edges.rename(columns={"organization": "from",
-                                "collabOrganization": "to",
+                                "toOrg": "to",
                                 "weight": "label"}, inplace=True)
 
     edges.to_json("Data/calculated.json", "records")
@@ -375,8 +420,9 @@ def genNetwork(issueData):
 
     netw = nx.from_pandas_dataframe(issueData,
                                     'organization',
-                                    'collabOrganization',
+                                    'toOrg',
                                     'weight')
+
     # outdegree = nx.out_degree_centrality(netw)
     # indegree = nx.in_degree_centrality(netw)
     degree = nx.degree_centrality(netw)
@@ -429,9 +475,9 @@ def getEdgeData(graph, issueTypes, org1, org2, creationFromDate = None, creation
 
     if(voteThreshold is not None):
         if (voteThreshold > 0):
-            query = query + """ AND c.vote > 0 """
+            query = query + """ AND (c.vote > 0 OR c.src <> "gerrit") """
         elif (voteThreshold < 0):
-            query = query + """ AND c.vote < 0 """
+            query = query + """ AND (c.vote < 0 OR c.src <> "gerrit") """
 
     query = query + """ AND n.organization = {org1} """
     params['org1'] = org1
@@ -439,6 +485,10 @@ def getEdgeData(graph, issueTypes, org1, org2, creationFromDate = None, creation
     if(len(priorities) > 0):
         query = query + """ AND i.priority IN {priorities} """
         params['priorities'] = priorities
+
+    if(len(dataTypes) > 0):
+        query = query + """ AND c.src IN {dataTypes} """
+        params['dataTypes'] = dataTypes
 
     if(creationFromDate is not None):
         query = query + """ AND i.createDate >= {creationFromDate} """
@@ -487,9 +537,33 @@ def getEdgeData(graph, issueTypes, org1, org2, creationFromDate = None, creation
 
     return issueData.to_json("Data/calculated_edge.json", "records")
 
+def userSentiments(graph):
+   query = """
+              MATCH (c:Comment)-[:ON]->(i:Issue)
+              WHERE i.src = "gerrit"
+              RETURN c.author, avg(c.sentiment)
+           """
+   users = pd.DataFrame(graph.data(query))
+   print(users)
+
+def mergeUsers(graph, userkeys):
+    query = """
+               MATCH (a:User), (b:User)-[:CREATED]->(c:Comment)
+               WHERE a.key = {key1} AND b.key = {key2}
+               WITH collect(c) as comments, a, b
+               FOREACH (comm in comments |
+                        SET comm.author = a.key
+                        CREATE (a)-[:CREATED]->(comm))
+               DETACH DELETE b
+            """
+    print(userkeys)
+    for key in userkeys:
+        if userkeys[key] is not "":
+            graph.run(query, parameters={"key1": userkeys[key][0], "key2": key})
+
 class HTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        graph = py2neo.Graph(neo4jLoc)
+        graph = py2neo.Graph(neo4jLoc, bolt=False)
 
         parsedUrl = urlparse.urlparse(self.path)
         splitPath = parsedUrl.path.lstrip("/").split("/")
@@ -520,6 +594,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
                 issueTypes = graph.run(query)
 
                 response = json.dumps(issueTypes.data())
+            elif(splitPath[0] == "dataTypes"):
+                query = "MATCH (n:Comment) RETURN DISTINCT n.src AS src"
+                dataTypes = graph.run(query)
+
+                response = json.dumps(dataTypes.data())
             elif(splitPath[0] == "dates"):
                 query = "MATCH (n:Issue) RETURN MIN(n.createDate) AS creationMin, MAX(n.createDate) AS creationMax, MIN(n.resolutionDate) AS resolutionMin, MAX(n.resolutionDate) AS resolutionMax"
                 dates = graph.run(query)
@@ -537,22 +616,27 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
             else:
                 if (len(keys) != 0 and 'issueTypes' in keys): # if there are no issueTypes then there is no response
                     issueTypes = parsedQuery['issueTypes'][0].split()
+                    dataTypes = parsedQuery['dataTypes'][0].split() if 'dataTypes' in keys else []
                     creationFromDate = parsedQuery['creationFromDate'][0] if 'creationFromDate' in keys else None
                     creationToDate = parsedQuery['creationToDate'][0] if 'creationToDate' in keys else None
                     resolutionFromDate = parsedQuery['resolutionFromDate'][0] if 'resolutionFromDate' in keys else None
                     resolutionToDate = parsedQuery['resolutionToDate'][0] if 'resolutionToDate' in keys else None
                     unresolved = parsedQuery['unResolved'][0] if 'unResolved' in keys else None
                     priorities = parsedQuery['priorities'][0].split() if 'priorities' in keys else []
+                    vote = int(parsedQuery['vote'][0]) if 'vote' in keys else None
                     sentiment = int(parsedQuery['sentiment'][0]) if 'sentiment' in keys else None
                     org1 = parsedQuery['org1'][0] if 'org1' in keys else None
                     org2 = parsedQuery['org2'][0] if 'org2' in keys else None
 
                     try:
-                        res = readDB(graph, issueTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities, sentiment)
-                        res = calcWeights(res)
+                        res = readDB(graph, issueTypes, dataTypes, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities, vote, sentiment)
+                        print("calcWeights")
+                        res = calcWeights(res, graph)
+                        print("genNetwork")
                         res = genNetwork(res)
                         if (org1 is not None and org2 is not None):
                             res2 = getEdgeData(graph, issueTypes, org1, org2, creationFromDate, creationToDate, resolutionFromDate, resolutionToDate, True if unresolved == "true" else False, priorities, sentiment)
+                        userSentiments(graph)
                     except (ZeroDivisionError, KeyError) as e:
                         self.send_header('Access-Control-Allow-Credentials', 'true')
                         self.send_header('Access-Control-Allow-Origin', '*')
@@ -600,8 +684,11 @@ class HTTPRequestHandler(BaseHTTPRequestHandler):
         elif(splitPath[0] == "deleteData"):
             os.remove(self.getFilePathFromPostData())
         elif(splitPath[0] == "reset"):
-            print("reset")
             clearGraph(graph)
+        elif(splitPath[0] == "merge"):
+            print("merge")
+            userKeys = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))).decode('ascii'))
+            mergeUsers(graph,userKeys)
 
     def getFilePathFromPostData(self):
         fileNameParams = urlparse.parse_qs(self.rfile.read(int(self.headers.get('content-length'))))
@@ -631,6 +718,7 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 class SimpleHttpServer():
     def __init__(self, ip, port):
         self.server = ThreadedHTTPServer((ip, port), HTTPRequestHandler)
+        
 
     def start(self):
         self.server_thread = threading.Thread(target=self.server.serve_forever)
